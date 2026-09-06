@@ -1,0 +1,1 @@
+export default function NotFound(){return <main className="legal-page shell"><a className="brand" href="/"><span>orbit.</span></a><span className="eyebrow orange">404 / A SMALL DETOUR</span><h1>This page is out of orbit.</h1><p>The link may have changed. Let's get you back to something useful.</p><a className="button button-primary" href="/">Back to the studio ↗</a></main>}

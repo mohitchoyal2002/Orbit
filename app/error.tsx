@@ -1,0 +1,2 @@
+"use client";
+export default function ErrorPage({reset}:{error:Error;reset:()=>void}){return <main className="legal-page shell"><span className="eyebrow orange">A MOMENTARY PAUSE</span><h1>Something didn't load.</h1><p>Please try again. Any project enquiry already confirmed with a reference is safely stored.</p><button className="button button-primary" onClick={reset}>Try again</button><p><a href="/">Back to Orbit</a></p></main>}
