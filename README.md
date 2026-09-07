@@ -4,6 +4,8 @@
 
 ORBIT Studio is a production-minded AI automation agency website for ambitious businesses. It combines a cinematic, motion-aware landing page with an owner-only enquiry inbox backed by Cloudflare D1.
 
+The client-operations implementation adds a secure `/portal` with leads, follow-up tracking, reusable workflows, persistent retries/alerts, onboarding, reporting and client-approved case-study drafts. See [client operations setup and limits](docs/CLIENT-OPERATIONS.md). These changes need a release and configured providers before they operate on the live site.
+
 **Live site:** [orbit-automation-studio.mohitchoyal2002.chatgpt.site](https://orbit-automation-studio.mohitchoyal2002.chatgpt.site)<br />
 **Inbox:** `/studio` (owner access only)
 
@@ -42,6 +44,10 @@ flowchart TD
 | `/studio` | Enquiry inbox | Authenticated owner |
 | `/api/enquiries` | Create an enquiry | Public, guarded |
 | `/api/studio/enquiries` | List, update or delete enquiries | Owner only |
+| `/portal` | Client leads, workflows, onboarding, reports and consent | Explicit client membership or owner |
+| `/api/operations` | Scoped client operations | Membership; owner-only administrative actions |
+| `/api/intake/:client` | Idempotent server-to-server lead intake | Rotatable client-specific key |
+| `/api/runner` | Process due jobs and monthly snapshots | Server runner secret and hosting access |
 | `/robots.txt` | Crawler policy | Public |
 | `/sitemap.xml` | Discoverable public routes | Public |
 
@@ -96,7 +102,7 @@ Set these values in the hosting platform's server-side environment, never in cli
 - API and owner responses are marked `no-store`; owner pages are excluded from indexing.
 - Security headers include a restrictive CSP, `X-Content-Type-Options`, `Referrer-Policy` and `Permissions-Policy`.
 - The UI opens an email reply draft; it does not silently send email.
-- WhatsApp, CRM sync, payments, calendar booking, automatic notifications and external AI providers are not connected. Add approved provider credentials and business rules before enabling them.
+- WhatsApp, HubSpot and email adapters are implemented for client workspaces, but no live provider credentials or scheduled runner are connected. Payments, calendar booking, incoming/delivery webhooks and external AI providers remain outside this release. See the setup guide before activation.
 
 ## Database changes
 
