@@ -7,5 +7,5 @@ export const metadata: Metadata = { title: "Project inbox — Orbit Studio", rob
 export default async function Studio() {
   await requireChatGPTUser("/studio");
   if (!await isStudioOwner()) return <main className="legal-page shell"><a className="brand" href="/"><span>orbit.</span></a><h1>A private workspace.</h1><p>This inbox is available only to the studio owner.</p><a className="button button-outline" href="/">Back to Orbit</a></main>;
-  return <Inbox />;
+  return <><div className="shell" style={{paddingTop:24}}><a className="text-button" href="/portal">Open client operations →</a></div><Inbox /></>;
 }

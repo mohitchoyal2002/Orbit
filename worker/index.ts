@@ -46,7 +46,7 @@ const worker = {
     response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
     response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     response.headers.set("Content-Security-Policy", "object-src 'none'; base-uri 'self'; form-action 'self'");
-    if (url.pathname.startsWith("/studio") || url.pathname.startsWith("/api/")) {
+    if (url.pathname.startsWith("/studio") || url.pathname.startsWith("/portal") || url.pathname.startsWith("/api/")) {
       response.headers.set("Cache-Control", "private, no-store");
       response.headers.set("X-Robots-Tag", "noindex, nofollow");
     }

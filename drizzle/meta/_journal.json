@@ -8,6 +8,13 @@
       "when": 1788684118180,
       "tag": "0000_tiresome_quentin_quire",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1788769028896,
+      "tag": "0001_minor_mastermind",
+      "breakpoints": true
     }
   ]
 }
