@@ -1,0 +1,166 @@
+/* Frosted materials sit behind the content. Opaque defaults work without blur. */
+:root {
+  --glass-fill: linear-gradient(135deg,#ffffff0e,transparent 62%),#171f2c;
+  --glass-light: linear-gradient(135deg,#ffffffb3,transparent 70%),#eef3fa;
+  --glass-popover: linear-gradient(135deg,#ffffff0e,transparent 70%),#1b2533;
+  --glass-line: #dceaff2e;
+  --glass-edge: #ffffff59;
+  --glass-shadow: 0 18px 48px #00000024,inset 0 1px 0 #ffffff26,inset 0 -1px 0 #ffffff06;
+  --glass-filter: none;
+}
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root {
+    --glass-fill: linear-gradient(135deg,#ffffff0d,transparent 62%),#141c2bcc;
+    --glass-light: linear-gradient(135deg,#ffffffe0,#ffffff28 70%),#edf3fade;
+    --glass-popover: linear-gradient(135deg,#ffffff0c,transparent 70%),#192333f0;
+    --glass-filter: blur(22px) saturate(145%);
+  }
+}
+
+.orbit-ui {
+  background: radial-gradient(ellipse 60% 550px at 100% 0,#396cad1c,transparent),#101722;
+  color: #f1f5fa;
+}
+.orbit-ui :is(p,li,td,label,button,input,textarea,select) { letter-spacing: normal; }
+.orbit-ui :is(.hero-description,.section-heading>p,.service-card>p,.demo-copy>p,.plan-description,.legal-page p,.widget-preview-courses p) { font-size: 1rem; line-height: 1.75; }
+.orbit-ui :is(.service-card>p,.section-heading>p,.demo-copy>p,.legal-page p,.widget-preview-courses p) { color: #c0cad8; }
+.orbit-ui :is(.workspace-description,.wt-heading>div>p:last-child) { font-size: 1rem; color: #b6c2d3; }
+.orbit-ui :is(.studio-title,.op-title,.ca-title,.wt-heading) h1 { letter-spacing: -.03em; line-height: 1.25; }
+.orbit-ui :is(.workspace-links a,.op-footer,.ca-footer,.wt-footer,.studio-note,.auth-access p,.auth-card .auth-privacy,.experience-motion,.nav-cta,.demo-tab[data-slot]) { font-size: .875rem; }
+.orbit-ui :is(.wt-tag,.ca-tag,.enquiry-status,.ca-stage,.op-badge) { font-size: .875rem; }
+.orbit-ui :is(.op-page,.ca-page,.wt-page,.studio-page) th { font-size: .875rem; color: #c1cbd9; }
+.orbit-ui :is(.wt-panel-head,.ca-panel-head,.op-section-head) h2 { line-height: 1.45; letter-spacing: -.015em; }
+.orbit-ui :is(.service-card h3,.demo-copy h3,.process-step h3,.auth-card h2,.widget-preview h2) { line-height: 1.3; letter-spacing: -.025em; }
+.orbit-ui :is(.legal-page h1,.widget-preview-intro h1,.auth-intro h1) { line-height: 1.2; letter-spacing: -.035em; }
+.orbit-ui :is(.hero,.final-cta) h1,.orbit-ui .final-cta h2 { font-weight: 600; }
+.orbit-ui :is(.price>strong,.inbox-stats strong,.op-metrics strong,.ca-metrics strong,.wt-metrics strong) { font-feature-settings: "tnum"; }
+
+/* The hero keeps its light identity; its floating navigation catches the light. */
+.orbit-ui .marketing-page .hero {
+  background: radial-gradient(ellipse at 85% 25%,#b9d2f259,transparent 60%),radial-gradient(ellipse at 5% 100%,#ffc3a83b,transparent 60%),#f2f5fa;
+  border-bottom: 1px solid #ffffff90;
+}
+.orbit-ui .marketing-page .site-header,
+.orbit-ui .marketing-page .site-header.scrolled {
+  top: 16px; left: 24px; width: calc(100% - 48px);
+  border: 1px solid #ffffffb3; border-radius: 22px;
+  background: var(--glass-light); color: #172235;
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: 0 8px 32px #1b355414,inset 0 1px 0 #fff,inset 0 -1px 0 #ffffff73;
+}
+.orbit-ui .marketing-page .nav-wrap { height: 76px; width: calc(100% - 40px); }
+.orbit-ui .marketing-page .site-header.scrolled .nav-wrap { height: 64px; }
+.orbit-ui .mobile-nav { background: var(--glass-light); border-radius: 0 0 22px 22px; box-shadow: none; }
+.orbit-ui .hero h1 em { color: #c74927; }
+.orbit-ui .hero-film-preview { border: 1px solid #ffffff80; box-shadow: 0 16px 40px #17233722,inset 0 1px #ffffff80; }
+.orbit-ui .film-preview-play { background: #ffffff1c; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: inset 0 1px #ffffff65; }
+.orbit-ui .film-preview-caption { font-size: .8125rem; line-height: 1.5; }
+
+/* A small set of material surfaces, with restrained highlights and depth. */
+.orbit-ui :is(.service-card,.price-card,.chat-window,.proof-device,.op-panel,.op-table,.inbox-table,.ca-workbench,.wt-workbench,.wt-enquiries,.wt-insights>section,.wt-install,.wt-configuration,.widget-preview-proof,.widget-preview-courses article,.widget-preview-film,.widget-preview-form,.widget-preview-install,.widget-preview-locations) {
+  background: var(--glass-fill); border: 1px solid var(--glass-line);
+  border-top-color: var(--glass-edge); border-radius: 22px;
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-shadow);
+}
+.orbit-ui .service-grid { gap: 20px; border: 0; }
+.orbit-ui .service-card { padding: 32px 26px; }
+.orbit-ui .service-card + .service-card { border: 1px solid var(--glass-line); border-top-color: var(--glass-edge); }
+.orbit-ui :is(.service-card,.price-card,.widget-preview-courses article) { transition: transform .35s var(--ease-out),border-color .3s,box-shadow .3s; }
+.orbit-ui :is(.service-card,.price-card,.widget-preview-courses article):hover { background: var(--glass-fill); border-color: #dae9ff55; box-shadow: 0 24px 56px #0003,inset 0 1px #ffffff59; }
+.orbit-ui .price-card.featured { background: var(--glass-light); color: #172235; border-color: #ffffffa6; box-shadow: 0 18px 48px #0003,inset 0 1px #fff; }
+.orbit-ui .price-card.featured:hover { background: var(--glass-light); }
+.orbit-ui .price-card.featured :is(.plan-description,.price>span,.eyebrow,li) { color: #424f62; }
+.orbit-ui .chat-header { background: #ffffff05; }
+.orbit-ui .proof-device { overflow: hidden; }
+.orbit-ui .proof-device :is(.proof-device-top,.proof-device-bottom) { background: #ffffff05; }
+.orbit-ui :is(.demo-tabs-list[data-slot],.privacy-toc a,.experience-motion) {
+  background: var(--glass-fill); border: 1px solid var(--glass-line);
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: inset 0 1px #ffffff1f,0 6px 24px #0002;
+}
+.orbit-ui .process-section { background: radial-gradient(ellipse at 0 0,#bfd5f33d,transparent 65%),#f2f5fa; }
+
+/* Workspaces have a quiet backdrop so translucent cards remain easy to scan. */
+.orbit-ui :is(.studio-page,.op-page,.ca-page,.wt-page,.auth-page,.widget-preview) {
+  background: radial-gradient(ellipse 800px 520px at 98% 0,#4675bd26,transparent 75%),radial-gradient(ellipse 650px 600px at 5% 40%,#c7683520,transparent 80%),#101722;
+}
+.orbit-ui .workspace-nav {
+  background: var(--glass-fill); border-color: var(--glass-line);
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: inset 0 1px #ffffff1a,6px 0 32px #00000014;
+}
+.orbit-ui .workspace-tabs a { color: #c0cbdb; line-height: 1.5; }
+.orbit-ui .workspace-tabs a[aria-current=page] { background: linear-gradient(135deg,#ffffff1a,#ffffff04),#ff683b20; color: #ffd2bc; box-shadow: inset 0 0 0 1px #ffb59245,inset 0 1px #ffd3ba36; }
+.orbit-ui .workspace-links a { color: #b8c4d5; }
+.orbit-ui :is(.inbox-stats,.op-metrics,.ca-metrics,.wt-metrics) > div {
+  background: var(--glass-fill); border: 1px solid var(--glass-line); border-top-color: var(--glass-edge);
+  border-radius: 18px; -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: var(--glass-shadow);
+}
+.orbit-ui :is(.inbox-stats,.op-metrics,.ca-metrics,.wt-metrics) > div:hover { background: var(--glass-fill); border-color: #dceaff50; }
+.orbit-ui .wt-metrics .wt-highlight { border-color: #ffb59165; background: linear-gradient(135deg,#b44e2829,transparent 80%),var(--glass-fill); color: #f4f6fb; }
+.orbit-ui .wt-metrics .wt-highlight :is(strong,small,div) { color: #ffd4bd; }
+.orbit-ui :is(.inbox-stats,.op-metrics,.ca-metrics,.wt-metrics) :is(span,small) { color: #b8c5d7; }
+.orbit-ui :is(.ca-thread,.ca-compose) { background: #0b14224d; }
+.orbit-ui :is(.op-page,.ca-page,.wt-page,.studio-page) th { background: #ffffff06; }
+.orbit-ui :is(.op-page,.ca-page,.wt-page,.studio-page) td { line-height: 1.65; }
+
+/* Forms and floating panels use denser frost for reliable text contrast. */
+.orbit-ui :is([data-slot=dialog-content],[data-slot=alert-dialog-content],[data-slot=sheet-content],[data-slot=select-content],[data-slot=dropdown-menu-content],[data-slot=popover-content]) {
+  background: var(--glass-popover); color: #f1f5fa; border: 1px solid #dceaff40; border-top-color: #ffffff70;
+  -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter);
+  box-shadow: 0 32px 100px #0006,inset 0 1px #ffffff2b;
+}
+.orbit-ui :is([data-slot=dialog-content],[data-slot=alert-dialog-content]) { border-radius: 24px; }
+.orbit-ui :is([data-slot=dialog-description],[data-slot=alert-dialog-description]) { color: #c0cbd9; line-height: 1.75; }
+.orbit-ui :is(input:not([type=checkbox]):not([type=color]),textarea,[data-slot=select-trigger]) { background: #0e1725e8; color: #edf3fb; border-color: #9baec461; box-shadow: inset 0 1px 3px #0002; line-height: 1.5; }
+.orbit-ui :is(input,textarea)::placeholder { color: #9eacc0; opacity: 1; }
+.orbit-ui :is(.button-outline,.wt-link-button,[data-slot=button][data-variant=outline]) { background: linear-gradient(135deg,#ffffff14,#ffffff04); border-color: #b8c8dc50; box-shadow: inset 0 1px #ffffff26; }
+.orbit-ui :is(.button-primary,.nav-cta,[data-slot=button][data-variant=default]) { background-image: linear-gradient(170deg,#ffffff30,transparent 62%); box-shadow: inset 0 1px #ffffff70,0 5px 18px #0002; }
+.orbit-ui .auth-card { background: var(--glass-light); color: #172235; border: 1px solid #ffffffa6; -webkit-backdrop-filter: var(--glass-filter); backdrop-filter: var(--glass-filter); box-shadow: 0 24px 75px #0004,inset 0 1px #fff; }
+.orbit-ui .auth-card :is(.auth-access p,.auth-privacy,p) { color: #465467; }
+.orbit-ui .auth-label { color: #983b24; }
+.orbit-ui .auth-google { font-family: var(--font-body); font-weight: 500; }
+.orbit-ui .auth-card .auth-error { color: #7e221b; }
+
+@media(max-width:1199px) {
+  .orbit-ui .workspace-nav { padding: 18px; margin-top: 16px; border: 1px solid var(--glass-line); border-top-color: var(--glass-edge); border-radius: 20px; }
+}
+@media(max-width:900px) {
+  .orbit-ui .service-card { padding: 28px; }
+}
+@media(max-width:680px) {
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root { --glass-filter: blur(12px) saturate(130%); --glass-fill: linear-gradient(135deg,#ffffff0e,transparent 65%),#141c2be6; }
+  }
+  .orbit-ui .marketing-page .site-header,.orbit-ui .marketing-page .site-header.scrolled { top: 10px; left: 10px; width: calc(100% - 20px); border-radius: 18px; }
+  .orbit-ui .marketing-page .nav-wrap { width: calc(100% - 24px); height: 66px; gap: 10px; }
+  .orbit-ui .site-header .orbit-brand > span:last-child { font-size: 1.25rem; }
+  .orbit-ui .nav-cta { font-size: .875rem; gap: 6px; padding-inline: 12px; }
+  .orbit-ui .service-card { padding: 26px 22px; }
+  .orbit-ui .service-card h3 { font-size: 1.65rem; min-height: auto; }
+  .orbit-ui .hero-description { line-height: 1.8; }
+  .orbit-ui .workspace-nav { padding: 16px 10px 10px; gap: 12px; }
+  .orbit-ui .workspace-tabs { gap: 4px; }
+  .orbit-ui .workspace-tabs a { font-size: .875rem; padding: 10px 4px; overflow-wrap: anywhere; }
+  .orbit-ui .workspace-links { gap: 10px; }
+  .orbit-ui :is(.inbox-stats,.op-metrics,.ca-metrics,.wt-metrics) > div { padding: 18px 15px; }
+  .orbit-ui :is([data-slot=dialog-content],[data-slot=alert-dialog-content]) { border-radius: 20px; }
+}
+@media(max-width:380px) {
+  .orbit-ui .marketing-page .nav-wrap { flex-wrap: wrap; height: auto; min-height: 70px; padding-block: 10px; }
+  .orbit-ui .workspace-nav > .orbit-brand > span:last-child { font-size: 1.3rem; }
+  .orbit-ui .workspace-tabs { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .orbit-ui .workspace-tabs[data-items="3"] { grid-template-columns: 1fr; }
+}
+/* Respect system transparency/contrast preferences without hiding content. */
+@media(prefers-reduced-transparency:reduce),(prefers-contrast:more) {
+  :root { --glass-fill: #171f2c; --glass-light: #f3f6fb; --glass-popover: #1b2533; --glass-filter: none; --glass-line: #8193ac; --glass-edge: #a8b8cb; }
+  .orbit-ui .film-preview-play { background: #1b2533; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
+@media(forced-colors:active) {
+  .orbit-ui { --glass-fill: Canvas; --glass-light: Canvas; --glass-popover: Canvas; --glass-filter: none; --glass-line: CanvasText; --glass-edge: CanvasText; --glass-shadow: none; }
+  .orbit-ui :is(h1,h2,h3,p,li,label,td,th,small,strong,span) { color: CanvasText; }
+  .orbit-ui :is(a,button,[role=tab]) { color: LinkText; border-color: ButtonText; }
+}

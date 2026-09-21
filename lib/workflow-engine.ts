@@ -2,6 +2,8 @@ import { z } from "zod";
 import { database, runtimeConfig } from "@/db/connection";
 import { hashValue } from "@/lib/enquiries";
 import { HttpError, monthBounds } from "@/lib/operations-access";
+import { callConsentFields, validateCallConsent } from "./voice-shared";
+import { queueVoiceCall } from "./voice";
 
 const connectorSchema = z.object({
   hubspotToken:z.string().min(1).optional(), alertEmail:z.string().email().optional(),
@@ -17,31 +19,37 @@ export function connectionStatus(clientId: string) {
 }
 export const leadInput = z.object({
   externalRef:z.string().min(1).max(120),name:z.string().trim().min(2).max(100),
-  email:z.string().trim().email().max(254).transform(v=>v.toLowerCase()),
+  email:z.union([z.string().trim().email().max(254),z.literal("")]).default("").transform(v=>v.toLowerCase()),
   phone:z.string().regex(/^(\+[1-9]\d{7,14})?$/,"Use an international phone number, such as +919876543210.").default(""),
   brief:z.string().trim().max(3000).default(""),
   consentEvidence:z.string().trim().max(1000).default(""),
   consentAt:z.number().int().positive().nullable().default(null),
+  ...callConsentFields,
 }).strict().superRefine((v,ctx)=>{
+  validateCallConsent(v,ctx);
+  if (!v.email && !v.phone) ctx.addIssue({code:z.ZodIssueCode.custom,message:"Add an email address or international phone number."});
   if ((v.consentAt && (!v.phone || v.consentEvidence.length<10 || v.consentAt>Date.now())) || (!v.consentAt && v.consentEvidence)) ctx.addIssue({code:z.ZodIssueCode.custom,message:"Record the phone number, consent time and a specific opt-in source together."});
 });
 export async function addLead(clientId:string, input:z.infer<typeof leadInput>) {
-  const db=database(), now=Date.now(), digest=await hashValue(JSON.stringify(input));
+  const {callConsentAt,callConsentEvidence,...legacyInput}=input;
+  const db=database(), now=Date.now(), digest=await hashValue(JSON.stringify(callConsentAt?input:legacyInput));
   const previous=await db.prepare("SELECT id, payload_hash FROM leads WHERE client_id = ? AND external_ref = ?").bind(clientId,input.externalRef).first<{id:string;payload_hash:string}>();
-  if(previous){if(previous.payload_hash!==digest)throw new HttpError(409,"This source reference already contains different details.");return {id:previous.id,duplicate:true};}
+  if(previous){if(previous.payload_hash!==digest)throw new HttpError(409,"This source reference already contains different details.");await queueVoiceCall(clientId,previous.id);return {id:previous.id,duplicate:true};}
   // Deterministic ID makes a concurrent replay share the exact same jobs.
   const id=await hashValue(`${clientId}:${input.externalRef}`);
   const statements=[db.prepare("INSERT INTO leads (id, client_id, external_ref, payload_hash, name, email, phone, brief, consent_evidence, consent_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(client_id, external_ref) DO NOTHING").bind(id,clientId,input.externalRef,digest,input.name,input.email,input.phone,input.brief,input.consentEvidence,input.consentAt,now,now)];
+  statements.push(db.prepare("UPDATE leads SET call_consent_at=?,call_consent_evidence=? WHERE id=? AND client_id=? AND payload_hash=?").bind(input.callConsentAt??null,input.callConsentEvidence||"",id,clientId,digest));
   for(const action of ["crm.sync","email.alert"]){
     statements.push(db.prepare("INSERT INTO workflow_jobs (id, client_id, lead_id, action, status, next_at, created_at, updated_at) SELECT ?, ?, ?, ?, 'pending', ?, ?, ? WHERE EXISTS (SELECT 1 FROM workflows WHERE client_id = ? AND template = ? AND enabled = 1) AND EXISTS (SELECT 1 FROM leads WHERE id = ? AND payload_hash = ?) ON CONFLICT(id) DO NOTHING").bind(`${action}:${id}`,clientId,id,action,now,now,now,clientId,action,id,digest));
   }
   await db.batch(statements);
   const saved=await db.prepare("SELECT payload_hash FROM leads WHERE id = ? AND client_id = ?").bind(id,clientId).first<{payload_hash:string}>();
   if(saved?.payload_hash!==digest)throw new HttpError(409,"This source reference already contains different details.");
+  await queueVoiceCall(clientId,id);
   return {id,duplicate:false};
 }
-export async function queueJob(clientId:string,leadId:string,action:string) {
-  const id=`${action}:${leadId}`, now=Date.now();
+export async function queueJob(clientId:string,leadId:string,action:string,revision?:string) {
+  const id=`${action}:${leadId}${revision?`:${revision}`:""}`, now=Date.now();
   await database().prepare("INSERT INTO workflow_jobs (id, client_id, lead_id, action, status, next_at, created_at, updated_at) VALUES (?, ?, ?, ?, 'pending', ?, ?, ?) ON CONFLICT(id) DO NOTHING").bind(id,clientId,leadId,action,now,now,now).run();
   return id;
 }
@@ -62,12 +70,13 @@ async function payloadFor(job:Job):Promise<Payload> {
   if(job.payload)return JSON.parse(job.payload);
   if(job.action==="crm.sync"){
     if(!lead)throw new ProviderFailure("lead_missing","failed");
+    if(!lead.email)throw new ProviderFailure("crm_email_required","blocked");
     const names=String(lead.name).split(" "),firstname=names.shift(),lastname=names.join(" ");
     return {url:"https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",body:{inputs:[{id:lead.email,idProperty:"email",properties:{email:lead.email,firstname,...(lastname?{lastname}:{}),...(lead.phone?{phone:lead.phone}:{})}}]}};
   }
   if(job.action==="whatsapp.template")return {url:`https://graph.facebook.com/${c.whatsapp!.version}/${c.whatsapp!.phoneId}/messages`,body:{messaging_product:"whatsapp",to:String(lead!.phone).replace(/^\+/,""),type:"template",template:{name:c.whatsapp!.template,language:{code:c.whatsapp!.language}}}};
   if(job.action==="email.alert"&&!lead)throw new ProviderFailure("lead_missing","failed");
-  return {url:"https://api.resend.com/emails",body:{from:env.ORBIT_EMAIL_FROM,to:[c.alertEmail],subject:job.action==="email.error"?"ORBIT workflow needs attention":"New ORBIT lead",text:job.action==="email.error"?"A workflow needs attention. Open your ORBIT workspace and review the Alerts tab. No customer details are included in this notification.":`A new lead is ready for review in your ORBIT workspace. Reference: ${job.lead_id}. Open Leads to review and respond.`}};
+  return {url:"https://api.resend.com/emails",body:{from:env.ORBIT_EMAIL_FROM,to:[c.alertEmail],subject:job.action==="email.error"?"OrbitFlow workflow needs attention":"New OrbitFlow lead",text:job.action==="email.error"?"A workflow needs attention. Open your OrbitFlow workspace and review the Alerts tab. No customer details are included in this notification.":`A new lead is ready for review in your OrbitFlow workspace. Reference: ${job.lead_id}. Open Leads to review and respond.`}};
 }
 async function deliver(job:Job,payload:Payload,transport:typeof fetch) {
   const c=connectors(job.client_id), token=job.action==="crm.sync"?c.hubspotToken:job.action==="whatsapp.template"?c.whatsapp?.token:runtimeConfig().ORBIT_RESEND_KEY;

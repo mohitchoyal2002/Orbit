@@ -1,0 +1,1 @@
+ALTER TABLE `voice_settings` ADD `test_mode` integer DEFAULT 1 NOT NULL;

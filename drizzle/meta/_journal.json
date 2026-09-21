@@ -15,6 +15,41 @@
       "when": 1788769028896,
       "tag": "0001_minor_mastermind",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1788938188927,
+      "tag": "0002_noisy_titanium_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1788979240067,
+      "tag": "0003_yielding_gorilla_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1789010321091,
+      "tag": "0004_friendly_sunfire",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1789844337457,
+      "tag": "0005_gigantic_golden_guardian",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1789844949933,
+      "tag": "0006_hesitant_meltdown",
+      "breakpoints": true
     }
   ]
 }

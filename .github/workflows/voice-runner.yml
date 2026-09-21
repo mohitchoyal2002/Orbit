@@ -1,0 +1,25 @@
+name: OrbitFlow calling queue
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions: {}
+concurrency:
+  group: orbitflow-calling-runner
+  cancel-in-progress: false
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Process eligible calls and expire transcripts
+        env:
+          ORBIT_RUNNER_TOKEN: ${{ secrets.ORBIT_RUNNER_TOKEN }}
+        run: |
+          if [ -z "$ORBIT_RUNNER_TOKEN" ]; then
+            echo 'Configure the ORBIT_RUNNER_TOKEN repository secret first.'
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 55 --request POST \
+            --header "Authorization: Bearer $ORBIT_RUNNER_TOKEN" \
+            https://www.orbitflow.work/api/voice/runner --output /dev/null

@@ -4,7 +4,7 @@ import { enquirySchema, hashValue, readBoundedJson, requestOriginAllowed } from 
 const json = (value: unknown, status = 200, extra: Record<string, string> = {}) => Response.json(value, { status, headers: { "Cache-Control": "no-store", ...extra } });
 
 export async function POST(request: Request) {
-  if (!requestOriginAllowed(request)) return json({ error: "Please submit this form from the Orbit website." }, 403);
+  if (!requestOriginAllowed(request)) return json({ error: "Please submit this form from the OrbitFlow website." }, 403);
   let payload: unknown;
   try { payload = await readBoundedJson(request); } catch (error) {
     const code = error instanceof Error ? error.message : "INVALID_JSON";

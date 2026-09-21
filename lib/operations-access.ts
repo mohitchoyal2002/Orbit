@@ -1,4 +1,4 @@
-import { getChatGPTUser } from "@/app/chatgpt-auth";
+import { getUser } from "@/app/auth";
 import { database, runtimeConfig } from "@/db/connection";
 import { requestOriginAllowed, readBoundedJson } from "@/lib/enquiries";
 import type { z } from "zod";
@@ -13,8 +13,8 @@ export async function endpoint(fn: () => Promise<Response>) {
   }
 }
 export async function identity() {
-  const user = await getChatGPTUser();
-  if (!user?.id || !user.email) throw new HttpError(401,"Sign in with ChatGPT to continue.");
+  const user = await getUser();
+  if (!user?.id || !user.email) throw new HttpError(401,"Sign in to OrbitFlow to continue.");
   return {...user,id:user.id,email:user.email.toLowerCase(),owner:user.email.toLowerCase() === runtimeConfig().ORBIT_ADMIN_EMAIL?.toLowerCase()};
 }
 export async function ownerAccess() {
@@ -35,7 +35,7 @@ export async function clientAccess(clientId: string) {
   return {user,client};
 }
 export async function body<T extends z.ZodTypeAny>(request: Request, schema: T, limit=16000): Promise<z.output<T>> {
-  if (!requestOriginAllowed(request)) throw new HttpError(403,"Please use the Orbit workspace.");
+  if (!requestOriginAllowed(request)) throw new HttpError(403,"Please use the OrbitFlow workspace.");
   let raw: unknown;
   try { raw = await readBoundedJson(request,limit); } catch { throw new HttpError(400,"Invalid request body."); }
   const parsed = schema.safeParse(raw);

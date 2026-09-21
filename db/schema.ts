@@ -38,6 +38,7 @@ export const leads = sqliteTable("leads", {
   name: text("name").notNull(), email: text("email").notNull(), phone: text("phone").notNull().default(""),
   brief: text("brief").notNull().default(""), status: text("status").notNull().default("new"),
   consentEvidence: text("consent_evidence").notNull().default(""), consentAt: integer("consent_at"),
+  callConsentAt: integer("call_consent_at"), callConsentEvidence: text("call_consent_evidence").notNull().default(""),
   optedOutAt: integer("opted_out_at"), firstResponseAt: integer("first_response_at"),
   followUpAt: integer("follow_up_at"), createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
 }, t => [uniqueIndex("idx_leads_source").on(t.clientId, t.externalRef), index("idx_leads_client_created").on(t.clientId, t.createdAt), index("idx_leads_follow_up").on(t.clientId, t.followUpAt)]);
@@ -83,3 +84,111 @@ export const featureRequests = sqliteTable("feature_requests", {
   category: text("category").notNull(), description: text("description").notNull(),
   actor: text("actor").notNull(), createdAt: integer("created_at").notNull(),
 }, t => [index("idx_requests_client").on(t.clientId, t.createdAt)]);
+
+export const coachingSettings = sqliteTable("coaching_settings", {
+  clientId: text("client_id").primaryKey().references(() => clients.id),
+  isDemo: integer("is_demo").notNull().default(1), createdAt: integer("created_at").notNull(),
+});
+export const coachingStudents = sqliteTable("coaching_students", {
+  leadId: text("lead_id").primaryKey().references(() => leads.id), clientId: text("client_id").notNull().references(() => clients.id),
+  phone: text("phone").notNull(), course: text("course").notNull(), centre: text("centre").notNull().default("Bhawarkua"),
+  learningMode: text("learning_mode").notNull().default("Undecided"), source: text("source").notNull(),
+  stage: text("stage").notNull().default("new"), background: text("background").notNull().default(""),
+  assignedTo: text("assigned_to").notNull().default(""), handoff: integer("handoff").notNull().default(0),
+  lastInboundAt: integer("last_inbound_at"), offeredSlots: text("offered_slots").notNull().default("[]"),
+}, t => [uniqueIndex("idx_coaching_phone").on(t.clientId,t.phone),index("idx_coaching_stage").on(t.clientId,t.stage)]);
+export const coachingSlots = sqliteTable("coaching_slots", {
+  id: text("id").primaryKey(),clientId: text("client_id").notNull().references(() => clients.id),course: text("course").notNull(),
+  centre: text("centre").notNull(),startsAt: integer("starts_at").notNull(),capacity: integer("capacity").notNull().default(1),
+}, t => [index("idx_coaching_slots_time").on(t.clientId,t.startsAt)]);
+export const coachingBookings = sqliteTable("coaching_bookings", {
+  leadId: text("lead_id").primaryKey().references(() => leads.id),id: text("id").notNull(),
+  clientId: text("client_id").notNull().references(() => clients.id),slotId: text("slot_id").notNull().references(() => coachingSlots.id),
+  status: text("status").notNull().default("confirmed"),updatedAt: integer("updated_at").notNull(),
+}, t => [uniqueIndex("idx_coaching_booking_version").on(t.id),index("idx_coaching_bookings_slot").on(t.clientId,t.slotId,t.status)]);
+export const coachingMessages = sqliteTable("coaching_messages", {
+  id: text("id").primaryKey(),clientId: text("client_id").notNull().references(() => clients.id),leadId: text("lead_id").notNull().references(() => leads.id),
+  direction: text("direction").notNull(),kind: text("kind").notNull().default("text"),body: text("body").notNull(),
+  parameters: text("parameters").notNull().default("[]"),status: text("status").notNull(),
+  providerId: text("provider_id"),errorCode: text("error_code"),bookingId: text("booking_id"),
+  attempts: integer("attempts").notNull().default(0),leaseUntil: integer("lease_until"),claimToken: text("claim_token"),
+  sendAt: integer("send_at").notNull(),createdAt: integer("created_at").notNull(),updatedAt: integer("updated_at").notNull(),
+}, t => [index("idx_coaching_messages_thread").on(t.clientId,t.leadId,t.createdAt),index("idx_coaching_messages_due").on(t.status,t.sendAt),index("idx_coaching_provider").on(t.clientId,t.providerId)]);
+
+// Public embed keys identify a site; they never authorize reading its data.
+export const widgetSites = sqliteTable("widget_sites", {
+  id: text("id").primaryKey(), clientId: text("client_id").notNull().references(() => clients.id),
+  name: text("name").notNull(), origins: text("origins").notNull(), privacyUrl: text("privacy_url").notNull(),
+  courses: text("courses").notNull(), color: text("color").notNull().default("#fa783c"),
+  enabled: integer("enabled").notNull().default(1), retentionDays: integer("retention_days").notNull().default(90),
+  createdAt: integer("created_at").notNull(), updatedAt: integer("updated_at").notNull(),
+}, t => [index("idx_widget_sites_client").on(t.clientId)]);
+export const widgetVisitors = sqliteTable("widget_visitors", {
+  id: text("id").primaryKey(), siteId: text("site_id").notNull().references(() => widgetSites.id),
+  leadId: text("lead_id"), consentVersion: text("consent_version").notNull(), consentAt: integer("consent_at").notNull(),
+  revokedAt: integer("revoked_at"), origin: text("origin").notNull(), lastSeen: integer("last_seen").notNull(),
+}, t => [index("idx_widget_visitors_site_seen").on(t.siteId,t.lastSeen)]);
+export const widgetSessions = sqliteTable("widget_sessions", {
+  id: text("id").primaryKey(), siteId: text("site_id").notNull().references(() => widgetSites.id),
+  visitorId: text("visitor_id").notNull().references(() => widgetVisitors.id),
+  startedAt: integer("started_at").notNull(), lastSeen: integer("last_seen").notNull(), expiresAt: integer("expires_at").notNull(),
+  attribution: text("attribution").notNull(), device: text("device").notNull(),
+}, t => [index("idx_widget_sessions_site_visitor").on(t.siteId,t.visitorId,t.startedAt),index("idx_widget_sessions_expiry").on(t.expiresAt)]);
+export const widgetEvents = sqliteTable("widget_events", {
+  id: text("id").primaryKey(), siteId: text("site_id").notNull().references(() => widgetSites.id),
+  sessionId: text("session_id").notNull().references(() => widgetSessions.id,{onDelete:"cascade"}),
+  visitorId: text("visitor_id").notNull().references(() => widgetVisitors.id),
+  type: text("type").notNull(), path: text("path").notNull(), properties: text("properties").notNull(),
+  occurredAt: integer("occurred_at").notNull(), receivedAt: integer("received_at").notNull(), expiresAt: integer("expires_at").notNull(),
+  schemaVersion: integer("schema_version").notNull().default(1),
+}, t => [index("idx_widget_events_site_time").on(t.siteId,t.occurredAt),index("idx_widget_events_journey").on(t.siteId,t.visitorId,t.occurredAt),index("idx_widget_events_expiry").on(t.expiresAt)]);
+export const widgetSubmissions = sqliteTable("widget_submissions", {
+  id: text("id").primaryKey(), siteId: text("site_id").notNull().references(() => widgetSites.id),
+  leadId: text("lead_id").notNull(), visitorId: text("visitor_id"), payloadHash: text("payload_hash").notNull(),
+  course: text("course").notNull(), origin: text("origin").notNull(), contactConsentAt: integer("contact_consent_at").notNull(),
+  whatsappConsentAt: integer("whatsapp_consent_at"), consentVersion: text("consent_version").notNull(),
+  consentText: text("consent_text").notNull(), createdAt: integer("created_at").notNull(),
+}, t => [index("idx_widget_submissions_site_time").on(t.siteId,t.createdAt),index("idx_widget_submissions_visitor").on(t.siteId,t.visitorId)]);
+
+// Host-bound Google login sessions; provider tokens are never persisted.
+export const googleAuthFlows = sqliteTable("google_auth_flows", {
+  id: text("id").primaryKey(), browserHash: text("browser_hash").notNull(),
+  verifier: text("verifier").notNull(), nonce: text("nonce").notNull(),
+  origin: text("origin").notNull(), returnPath: text("return_path").notNull(), expiresAt: integer("expires_at").notNull(),
+}, t => [index("idx_google_flows_expiry").on(t.expiresAt)]);
+export const googleAuthSessions = sqliteTable("google_auth_sessions", {
+  id: text("id").primaryKey(), userId: text("user_id").notNull(), email: text("email").notNull(),
+  fullName: text("full_name"), origin: text("origin").notNull(), createdAt: integer("created_at").notNull(), expiresAt: integer("expires_at").notNull(),
+}, t => [index("idx_google_sessions_expiry").on(t.expiresAt)]);
+
+export const voiceSettings = sqliteTable("voice_settings", {
+  clientId:text("client_id").primaryKey().references(()=>clients.id),
+  adminEnabled:integer("admin_enabled").notNull().default(0),clientEnabled:integer("client_enabled").notNull().default(0),
+  testMode:integer("test_mode").notNull().default(1),
+  businessContext:text("business_context").notNull().default(""),roleContext:text("role_context").notNull().default(""),
+  language:text("language").notNull().default("Hindi"),dailyLimit:integer("daily_limit").notNull().default(20),
+  startHour:integer("start_hour").notNull().default(10),endHour:integer("end_hour").notNull().default(18),
+  maxAttempts:integer("max_attempts").notNull().default(2),revision:integer("revision").notNull().default(0),
+  updatedAt:integer("updated_at").notNull(),updatedBy:text("updated_by").notNull(),
+});
+export const voiceCalls = sqliteTable("voice_calls", {
+  id:text("id").primaryKey(),clientId:text("client_id").notNull().references(()=>clients.id),
+  leadId:text("lead_id").notNull().references(()=>leads.id),phone:text("phone").notNull(),
+  status:text("status").notNull().default("queued"),attempts:integer("attempts").notNull().default(0),
+  nextAt:integer("next_at").notNull(),expiresAt:integer("expires_at").notNull(),
+  activeAttemptId:text("active_attempt_id"),errorCode:text("error_code"),
+  outcome:text("outcome"),summary:text("summary"),answers:text("answers"),
+  createdAt:integer("created_at").notNull(),updatedAt:integer("updated_at").notNull(),
+},t=>[uniqueIndex("idx_voice_calls_contact").on(t.clientId,t.phone),index("idx_voice_calls_due").on(t.status,t.nextAt),index("idx_voice_calls_client").on(t.clientId,t.createdAt)]);
+export const voiceAttempts = sqliteTable("voice_attempts", {
+  id:text("id").primaryKey(),clientId:text("client_id").notNull().references(()=>clients.id),callId:text("call_id").notNull().references(()=>voiceCalls.id),
+  attemptNumber:integer("attempt_number").notNull(),providerId:text("provider_id"),
+  tokenHash:text("token_hash").notNull(),status:text("status").notNull().default("dispatching"),
+  contextSnapshot:text("context_snapshot").notNull(),settingsRevision:integer("settings_revision").notNull(),
+  callerNumber:text("caller_number").notNull(),duration:integer("duration"),interactionId:text("interaction_id"),
+  transcript:text("transcript"),resultHash:text("result_hash"),startedAt:integer("started_at").notNull(),finishedAt:integer("finished_at"),
+},t=>[uniqueIndex("idx_voice_attempt_provider").on(t.providerId),uniqueIndex("idx_voice_attempt_number").on(t.callId,t.attemptNumber),index("idx_voice_attempt_client_time").on(t.clientId,t.startedAt)]);
+export const voiceSuppression = sqliteTable("voice_suppression", {
+  id:text("id").primaryKey(),clientId:text("client_id").notNull().references(()=>clients.id),phone:text("phone").notNull(),
+  reason:text("reason").notNull(),createdAt:integer("created_at").notNull(),
+},t=>[uniqueIndex("idx_voice_suppression_contact").on(t.clientId,t.phone)]);

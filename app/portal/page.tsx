@@ -1,7 +1,5 @@
 import type { Metadata } from "next";
-import { requireChatGPTUser } from "@/app/chatgpt-auth";
-import Portal from "./portal";
-import "./portal.css";
+import ClientWorkspace from "./workspace";
 export const dynamic="force-dynamic";
-export const metadata:Metadata={title:"Client workspace — Orbit Studio",robots:{index:false,follow:false}};
-export default async function Page(){await requireChatGPTUser("/portal");return <Portal/>;}
+export const metadata:Metadata={title:"Client workspace — OrbitFlow",robots:{index:false,follow:false}};
+export default function Page(){return <ClientWorkspace/>;}

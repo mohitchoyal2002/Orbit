@@ -1,6 +1,8 @@
 /** Cloudflare Worker entry point for the vinext-starter template. */
 import { handleImageOptimization, DEFAULT_DEVICE_SIZES, DEFAULT_IMAGE_SIZES } from "vinext/server/image-optimization";
 import handler from "vinext/server/app-router-entry";
+import { domainRedirect, SITE_HOST_HEADER, surfaceForHostname } from "../lib/site-domains";
+import { processVoiceCalls } from "../lib/voice";
 
 interface Env {
   ASSETS: Fetcher;
@@ -28,6 +30,8 @@ interface ExecutionContext {
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+    const redirect = domainRedirect(request);
+    if (redirect) return redirect;
 
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
@@ -40,13 +44,20 @@ const worker = {
       }, allowedWidths);
     }
 
-    const result = await handler.fetch(request, env, ctx);
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(SITE_HOST_HEADER, url.hostname);
+    const result = await handler.fetch(new Request(request, { headers: requestHeaders }), env, ctx);
     const response = new Response(result.body, result);
+    // Respond promptly to the form, then drain durable call jobs within the Worker's
+    // lifetime. No browser tab is needed. Timed retries also use the dedicated runner.
+    if(request.method==="POST"&&result.ok&&(/^\/api\/(intake|widget|coaching)(\/|$)/.test(url.pathname)||url.pathname==="/api/operations"||url.pathname.startsWith("/api/voice/webhook/"))) {
+      ctx.waitUntil(processVoiceCalls().catch(()=>{console.error("Call queue processing deferred to runner");}));
+    }
     response.headers.set("X-Content-Type-Options", "nosniff");
-    response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+    response.headers.set("Referrer-Policy", url.pathname.startsWith("/api/auth/")||url.pathname.startsWith("/api/voice/") ? "no-referrer" : "strict-origin-when-cross-origin");
     response.headers.set("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     response.headers.set("Content-Security-Policy", "object-src 'none'; base-uri 'self'; form-action 'self'");
-    if (url.pathname.startsWith("/studio") || url.pathname.startsWith("/portal") || url.pathname.startsWith("/api/")) {
+    if (surfaceForHostname(url.hostname) !== "marketing" || url.pathname.startsWith("/studio") || url.pathname.startsWith("/portal") || url.pathname.startsWith("/coaching") || url.pathname.startsWith("/api/") || ["/login", "/logout", "/tracking", "/widget-demo", "/signed-out", "/calling"].includes(url.pathname)) {
       response.headers.set("Cache-Control", "private, no-store");
       response.headers.set("X-Robots-Tag", "noindex, nofollow");
     }
