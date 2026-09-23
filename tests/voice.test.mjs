@@ -34,6 +34,35 @@ function callbackInfo(payload){const u=new URL(payload.body.webhook_config.url);
 const callback=(info,payload)=>webhook.POST(new Request(base+'/api/voice/webhook/'+info.id+'?token='+info.token,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),{params:Promise.resolve({attempt:info.id})});
 
 test('AI calling: real routes, SQLite transactions, isolated Sarvam transport',async t=>{
+ await t.test('manual Call now retains attempt history and respects consent, cooldown and provider uncertainty',async()=>{
+  reset();const c=fixture();await lead(c,{callConsentAt:NOW-1000});due(c);
+  const id=sql.prepare('SELECT id FROM voice_calls').get().id;
+  const first=await voice.requestManualVoiceCall(c,id,NOW);
+  assert.equal(first.scheduledFor,NOW);
+  await assert.rejects(voice.requestManualVoiceCall(c,id,NOW),/active or unverified attempt/);
+  const mock=capture();await voice.processVoiceCalls(c,mock.transport,NOW);
+  assert.equal(mock.payloads.length,1);
+  await assert.rejects(voice.requestManualVoiceCall(c,id,NOW+31*60000),/active or unverified attempt/);
+  let attempt=sql.prepare('SELECT * FROM voice_attempts').get();
+  await voice.acceptVoiceResult(callbackInfo(mock.payloads[0]).id,callbackInfo(mock.payloads[0]).token,result(attempt,{status:'no_answer'}),NOW);
+  assert.equal(sql.prepare('SELECT status FROM voice_calls').get().status,'queued');
+  await assert.rejects(voice.requestManualVoiceCall(c,id,NOW+20*60000),/Wait 30 minutes/);
+  await voice.requestManualVoiceCall(c,id,NOW+31*60000);
+  await voice.processVoiceCalls(c,mock.transport,NOW+31*60000);
+  assert.equal(mock.payloads.length,2);
+  assert.deepEqual(sql.prepare('SELECT attempt_number FROM voice_attempts ORDER BY attempt_number').all().map(a=>a.attempt_number),[1,2]);
+  await assert.rejects(voice.requestManualVoiceCall(c,id,NOW+62*60000),/active or unverified attempt/);
+  sql.prepare("UPDATE voice_calls SET status='needs_review',error_code='provider_result_unknown' WHERE id=?").run(id);
+  await assert.rejects(voice.requestManualVoiceCall(c,id,NOW+62*60000),/active or unverified attempt/);
+  assert.equal(sql.prepare('SELECT COUNT(*) AS n FROM voice_attempts').get().n,2);
+  reset();const d=fixture();await lead(d,{callConsentAt:NOW-1000});due(d);
+  const contact=sql.prepare('SELECT id FROM voice_calls').get().id;
+  sql.prepare("UPDATE leads SET call_consent_at=NULL,call_consent_evidence=''").run();
+  await assert.rejects(voice.requestManualVoiceCall(d,contact,NOW),/Fresh AI-call permission/);
+  sql.prepare('UPDATE leads SET call_consent_at=?,call_consent_evidence=?').run(NOW-1000,'Explicit AI-call permission and transcript notice on test form.');
+  sql.prepare('UPDATE voice_settings SET client_enabled=0').run();
+  await assert.rejects(voice.requestManualVoiceCall(d,contact,NOW),/Enable live calling/);
+ });
  await t.test('the authorized live-test workspace still honors pause, test mode, hours and daily limits',async()=>{
   reset();const c=fixture({id:'be29a896-ff9a-4b1c-9bd6-a3b4a2c5418c'});await lead(c);due(c);
   sql.prepare('UPDATE voice_settings SET test_mode=1,client_enabled=0,daily_limit=1,start_hour=10,end_hour=18 WHERE client_id=?').run(c);

@@ -7,7 +7,7 @@ import { DEMO_CLIENT } from "./coaching-shared";
 
 const DAY=86400000;
 type Lead={id:string;name:string;brief:string;phone:string;client_id:string;call_consent_at:number|null;call_consent_evidence:string;opted_out_at:number|null;status:string;created_at:number};
-type Call={id:string;client_id:string;lead_id:string;phone:string;status:string;attempts:number;next_at:number;expires_at:number;active_attempt_id:string|null;created_at:number};
+type Call={id:string;client_id:string;lead_id:string;phone:string;status:string;error_code:string|null;attempts:number;next_at:number;expires_at:number;active_attempt_id:string|null;created_at:number};
 type Attempt={id:string;call_id:string;client_id:string;provider_id:string|null;token_hash:string;status:string;caller_number:string;result_hash:string|null;started_at:number};
 export async function getVoiceSettings(client:string) {
   const saved=await database().prepare("SELECT * FROM voice_settings WHERE client_id=?").bind(client).first<VoiceSettings>();
@@ -47,6 +47,31 @@ export async function suppressVoiceContact(client:string,phone:string,reason:str
   ]);
 }
 
+// A manual request creates one additional attempt on the existing call record.
+// Ambiguous provider sends must be reconciled before any operator redial.
+export async function requestManualVoiceCall(client:string,callId:string,now=Date.now()) {
+  const db=database(),cfg=await getVoiceSettings(client);
+  if(!cfg.admin_enabled||!cfg.client_enabled||cfg.test_mode||await isDemoClient(client))throw new HttpError(409,"Enable live calling for this workspace first.");
+  if(!voiceConnector(client)||!cfg.business_context||!cfg.role_context)throw new HttpError(409,"Complete the Sarvam connection and business context first.");
+  const call=await db.prepare("SELECT v.*,l.call_consent_at,l.call_consent_evidence,l.opted_out_at,l.status AS lead_status,l.phone AS lead_phone,c.active AS client_active FROM voice_calls v JOIN leads l ON l.id=v.lead_id AND l.client_id=v.client_id JOIN clients c ON c.id=v.client_id WHERE v.id=? AND v.client_id=?").bind(callId,client).first<Call&Lead&{lead_status:string;lead_phone:string;client_active:number}>();
+  if(!call)throw new HttpError(404,"Call unavailable.");
+  if(!["completed","no_answer","busy","failed","test_saved","queued"].includes(call.status)||call.status==="queued"&&call.error_code==="manual_requested")throw new HttpError(409,"This contact has an active or unverified attempt. Review the provider history before redialing.");
+  if(!call.client_active||!call.call_consent_at||call.call_consent_at<now-2*DAY||call.call_consent_evidence.length<15||call.opted_out_at||call.lead_phone!==call.phone||!["won","lost"].every(s=>call.lead_status!==s))throw new HttpError(409,"Fresh AI-call permission is required, or this contact is no longer eligible.");
+  if(await db.prepare("SELECT id FROM voice_suppression WHERE client_id=? AND phone=?").bind(client,call.phone).first())throw new HttpError(409,"This contact is on the do-not-call list.");
+  const last=await db.prepare("SELECT MAX(started_at) AS last,COUNT(*) AS today FROM voice_attempts WHERE call_id=? AND started_at>=?").bind(callId,now-DAY).first<{last:number|null;today:number}>();
+  if((last?.last||0)>now-30*60000||Number(last?.today||0)>=2)throw new HttpError(429,"Wait 30 minutes between calls and limit this contact to two attempts per day.");
+  const dayStart=Math.floor((now+19800000)/DAY)*DAY-19800000;
+  const daily=await db.prepare("SELECT COUNT(*) AS total FROM voice_attempts WHERE client_id=? AND started_at>=? AND started_at<?").bind(client,dayStart,dayStart+DAY).first<{total:number}>();
+  if(Number(daily?.total||0)>=cfg.daily_limit)throw new HttpError(429,"The workspace has reached its daily calling limit.");
+  const next=nextCallTime(now,cfg.start_hour,cfg.end_hour);
+  const updated=await db.prepare(`UPDATE voice_calls SET status='queued',error_code='manual_requested',outcome=NULL,summary=NULL,answers=NULL,next_at=?,expires_at=?,updated_at=?
+    WHERE id=? AND client_id=? AND status IN('completed','no_answer','busy','failed','test_saved','queued') AND NOT(status='queued' AND COALESCE(error_code,'')='manual_requested')
+    AND EXISTS(SELECT 1 FROM voice_settings WHERE client_id=? AND admin_enabled=1 AND client_enabled=1 AND test_mode=0 AND revision=?)
+    AND NOT EXISTS(SELECT 1 FROM voice_suppression WHERE client_id=? AND phone=voice_calls.phone) RETURNING id`).bind(next,now+2*DAY,now,callId,client,client,cfg.revision,client).first();
+  if(!updated)throw new HttpError(409,"Call settings or status changed. Refresh and try again.");
+  return {scheduledFor:next,callId};
+}
+
 // Durable outbox. Each accepted attempt is delivered at most once by OrbitFlow.
 // Sarvam does not document request idempotency: ambiguous sends always need review.
 export async function processVoiceCalls(client?:string,transport:typeof fetch=fetch,now=Date.now()) {
@@ -72,7 +97,7 @@ export async function processVoiceCalls(client?:string,transport:typeof fetch=fe
     const stop=await db.prepare("SELECT id FROM voice_suppression WHERE client_id=? AND phone=?").bind(call.client_id,call.phone).first();
     const opted=await db.prepare("SELECT id FROM leads WHERE client_id=? AND phone=? AND opted_out_at IS NOT NULL LIMIT 1").bind(call.client_id,call.phone).first();
     const invalid=!company||!lead||!lead.call_consent_at||lead.call_consent_evidence.length<15||lead.phone!==call.phone||stop||opted||["won","lost"].includes(lead.status)||await isDemoClient(call.client_id);
-    if(invalid||call.attempts>=cfg.max_attempts) {
+    if(invalid||(call.attempts>=cfg.max_attempts&&call.error_code!=="manual_requested")) {
       await db.prepare("UPDATE voice_calls SET status='cancelled',error_code=?,updated_at=? WHERE id=? AND status='queued'").bind(invalid?"contact_ineligible":"attempt_limit",now,call.id).run();continue;
     }
     if(!cfg.admin_enabled||!cfg.client_enabled||cfg.test_mode)continue;

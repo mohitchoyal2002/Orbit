@@ -28,6 +28,7 @@ The near-term business goal is to present a credible, working coaching-institute
 - Visual direction: premium dark interface, warm orange accents, readable modern typography, liquid/frosted glass surfaces and restrained cinematic motion.
 - Marketing inspiration included immersive scroll storytelling, full-screen background video and proof-oriented transitions. The implementation must remain original and must label simulated outcomes as simulated.
 - Motion must remain optional and respect reduced-motion/reduced-data preferences.
+- The marketing hero includes a Three.js orbit sculpture driven by Anime.js. Scroll reveals and calling activity use Anime.js while honoring the motion control.
 - Public claims must not invent clients, testimonials, conversion rates, placements, prices or guarantees.
 
 ### Production hosts
@@ -391,4 +392,3 @@ This document captures product context, not credentials and not a substitute for
 1. Treat security and consent constraints here as mandatory.
 2. Inspect the deployed code and live state.
 3. Update the implementation and this document together after a verified decision.
-

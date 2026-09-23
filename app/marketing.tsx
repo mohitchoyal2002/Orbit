@@ -14,6 +14,8 @@ import LeadFlowStory from "@/components/lead-flow-story";
 import CinematicMedia from "@/components/cinematic-media";
 import { useExperience } from "@/components/experience-provider";
 import OrbitFlowSiteTracking from "@/components/orbitflow-site-tracking";
+import OrbitSculpture from "@/components/orbit-sculpture";
+import { animate } from "animejs";
 
 const cases = [
  {id:"sales",label:"Lead follow-up",icon:MessageCircle,title:"The next customer shouldn't have to wait.",description:"Turn a new enquiry into a useful conversation. Answer the basics, qualify the fit, and hand a warm lead to your team.",steps:["New website enquiry","Qualify & answer","Prepare a discovery call"],question:"Hi! Can you help automate our lead follow-ups?",answer:"Absolutely. Where do your enquiries come from—your website, WhatsApp, or both?",reply:"Mostly WhatsApp. Around 50 a day.",final:"Got it. Let's map a follow-up flow for your team. Would you like to explore a discovery call?",tag:"CONVERSATION → OPPORTUNITY"},
@@ -42,11 +44,11 @@ export default function Marketing({navigation}:{navigation:SiteNavigation}){
  const [menu,setMenu]=useState(false),[contact,setContact]=useState(false),[plan,setPlan]=useState("Discovery"),[goal,setGoal]=useState("Lead follow-up"),[active,setActive]=useState("sales"),[demo,setDemo]=useState(false),[sending,setSending]=useState(false),[error,setError]=useState(""),[reference,setReference]=useState("");
  const form=useRef<HTMLFormElement>(null),started=useRef(0),requestId=useRef(""),trigger=useRef<HTMLElement|null>(null);
  useEffect(()=>{
-  const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add("is-visible");observer.unobserve(e.target)}}),{threshold:.06});
+  const observer=new IntersectionObserver(entries=>entries.forEach(e=>{if(e.isIntersecting){e.target.classList.add("is-visible");if(motion)animate(e.target,{opacity:[0,1],y:[22,0],duration:720,ease:"out(3)"});observer.unobserve(e.target)}}),{threshold:.06});
   document.documentElement.classList.add("enhanced");document.querySelectorAll("[data-reveal]").forEach(el=>observer.observe(el));
   let frame=0;const update=()=>{if(frame)return;frame=requestAnimationFrame(()=>{const y=scrollY,max=document.documentElement.scrollHeight-innerHeight;document.documentElement.style.setProperty("--scroll-progress",String(max>0?y/max:0));document.documentElement.style.setProperty("--hero-shift",`${Math.min(y*.16,150)}px`);document.querySelector(".site-header")?.classList.toggle("scrolled",y>40);document.querySelectorAll<HTMLElement>("[data-parallax]").forEach(el=>{const r=el.parentElement?.getBoundingClientRect();if(r&&r.bottom>0&&r.top<innerHeight)el.style.setProperty("--parallax",`${(r.top-innerHeight*.5)*-.1}px`)});frame=0})};window.addEventListener("scroll",update,{passive:true});update();
   return()=>{observer.disconnect();window.removeEventListener("scroll",update);cancelAnimationFrame(frame);document.documentElement.classList.remove("enhanced")}
- },[]);
+ },[motion]);
  useEffect(()=>{if(!menu)return;const escape=(e:KeyboardEvent)=>{if(e.key==="Escape")setMenu(false)};window.addEventListener("keydown",escape);return()=>window.removeEventListener("keydown",escape)},[menu]);
  useEffect(()=>{
   const sections=Array.from(document.querySelectorAll<HTMLElement>("[data-film]"));
@@ -73,6 +75,7 @@ export default function Marketing({navigation}:{navigation:SiteNavigation}){
   <main id="main">
    <section className="hero" aria-labelledby="hero-title" data-film="hero" data-spotlight>
     <div className="hero-grid" aria-hidden="true"/>
+    <OrbitSculpture motion={motion}/>
     <div className="shell hero-content">
      <div className="hero-kicker"><span className="eyebrow hero-eyebrow">AI AUTOMATION STUDIO</span><span>BUILT FOR YOUR NEXT CHAPTER ↗</span></div>
      <h1 id="hero-title"><span>Less manual.</span><span>More <em>momentum.</em></span></h1>

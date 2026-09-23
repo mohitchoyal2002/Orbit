@@ -2,7 +2,7 @@ import { z } from "zod";
 import { database, runtimeConfig } from "@/db/connection";
 import { body,clientAccess,endpoint,HttpError,identity,reply } from "@/lib/operations-access";
 import { openingLine,SARVAM_AGENT_TEMPLATE,voiceContextSchema } from "@/lib/voice-shared";
-import { getVoiceSettings,isDemoClient,processVoiceCalls,suppressVoiceContact } from "@/lib/voice";
+import { getVoiceSettings,isDemoClient,processVoiceCalls,requestManualVoiceCall,suppressVoiceContact } from "@/lib/voice";
 import { CallProviderError,checkSarvamConnection,voiceConnector } from "@/lib/voice-sarvam";
 
 export const GET=(request:Request)=>endpoint(async()=>{
@@ -30,9 +30,10 @@ export const GET=(request:Request)=>endpoint(async()=>{
 const client=z.string().uuid(),revision=z.number().int().nonnegative();
 const schema=z.discriminatedUnion("action",[
   z.object({action:z.literal("context"),client,revision,...voiceContextSchema.shape}).strict(),
-  z.object({action:z.literal("admin"),client,revision,enabled:z.boolean(),testMode:z.boolean().default(true),dailyLimit:z.number().int().min(1).max(100),startHour:z.number().int().min(9).max(19),endHour:z.number().int().min(10).max(20),maxAttempts:z.number().int().min(1).max(2)}).strict(),
+  z.object({action:z.literal("admin"),client,revision,enabled:z.boolean(),dailyLimit:z.number().int().min(1).max(100),startHour:z.number().int().min(9).max(19),endHour:z.number().int().min(10).max(20),maxAttempts:z.number().int().min(1).max(2)}).strict(),
   z.object({action:z.literal("activate"),client,revision,enabled:z.boolean()}).strict(),
   z.object({action:z.literal("stop"),client,call:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
+  z.object({action:z.literal("manualCall"),client,call:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
   z.object({action:z.literal("process"),client}).strict(),
   z.object({action:z.literal("voicePreview"),client}).strict(),
   z.object({action:z.literal("runnerSecret"),client}).strict(),
@@ -58,6 +59,11 @@ export const POST=(request:Request)=>endpoint(async()=>{
     if(!row)throw new HttpError(404,"Call unavailable.");
     await suppressVoiceContact(data.client,row.phone,"operator_request");return reply({ok:true});
   }
+  if(data.action==="manualCall") {
+    const queued=await requestManualVoiceCall(data.client,data.call,now);
+    const processed=queued.scheduledFor===now?await processVoiceCalls(data.client):[];
+    return reply({ok:true,scheduledFor:queued.scheduledFor,processed});
+  }
   if(data.action==="voicePreview") {
     const key=runtimeConfig().ORBIT_SARVAM_KEY;if(!key)throw new HttpError(409,"Sarvam voice preview is not connected.");
     const bucket=Math.floor(now/60000),limit=await db.prepare("INSERT INTO rate_limits(key,hits,expires_at) VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET hits=hits+1 RETURNING hits").bind(`voice-preview:${data.client}:${bucket}`,(bucket+1)*60000).first<{hits:number}>();
@@ -75,8 +81,8 @@ export const POST=(request:Request)=>endpoint(async()=>{
   let changed;
   if(data.action==="admin") {
     if(data.endHour<=data.startHour)throw new HttpError(400,"End time must be after the start time.");
-    if(!data.testMode&&await isDemoClient(data.client))throw new HttpError(409,"Keep the synthetic demo in test mode. Use a real client workspace for live calls.");
-    changed=await db.prepare("UPDATE voice_settings SET admin_enabled=?,test_mode=?,client_enabled=CASE WHEN ?=0 OR ?!=test_mode THEN 0 ELSE client_enabled END,daily_limit=?,start_hour=?,end_hour=?,max_attempts=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(+data.enabled,+data.testMode,+data.enabled,+data.testMode,data.dailyLimit,data.startHour,data.endHour,data.maxAttempts,now,user.id,data.client,data.revision).first();
+    if(data.enabled&&await isDemoClient(data.client))throw new HttpError(409,"Use a real client workspace for live calls.");
+    changed=await db.prepare("UPDATE voice_settings SET admin_enabled=?,test_mode=0,client_enabled=CASE WHEN ?=0 OR test_mode!=0 THEN 0 ELSE client_enabled END,daily_limit=?,start_hour=?,end_hour=?,max_attempts=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(+data.enabled,+data.enabled,data.dailyLimit,data.startHour,data.endHour,data.maxAttempts,now,user.id,data.client,data.revision).first();
   } else if(data.action==="context") {
     if(!user.owner&&!cfg.admin_enabled)throw new HttpError(403,"Ask the owner to enable AI calling for this workspace first.");
     changed=await db.prepare("UPDATE voice_settings SET business_context=?,role_context=?,language=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(data.businessContext,data.roleContext,data.language,now,user.id,data.client,data.revision).first();
@@ -92,6 +98,6 @@ export const POST=(request:Request)=>endpoint(async()=>{
     changed=await db.prepare("UPDATE voice_settings SET client_enabled=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(+data.enabled,now,user.id,data.client,data.revision).first();
   }
   if(!changed)throw new HttpError(409,"Settings changed. Refresh before saving again.");
-  if((data.action==="activate"||data.action==="admin")&&(!data.enabled||(data.action==="admin"&&data.testMode)))await db.prepare("UPDATE voice_calls SET status='cancelled',error_code='calling_paused',updated_at=? WHERE client_id=? AND status IN('queued','blocked')").bind(now,data.client).run();
+  if((data.action==="activate"||data.action==="admin")&&!data.enabled)await db.prepare("UPDATE voice_calls SET status='cancelled',error_code='calling_paused',updated_at=? WHERE client_id=? AND status IN('queued','blocked')").bind(now,data.client).run();
   return reply({ok:true});
 });
