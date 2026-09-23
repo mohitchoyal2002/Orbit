@@ -18,8 +18,8 @@ const post=(payload,origin=base)=>routes.POST(new Request(base+'/api/voice',{met
 const get=(c,extra='')=>routes.GET(new Request(base+'/api/voice'+(c?'?client='+c+extra:'')));
 const NOW=Date.UTC(2026,8,19,6,30); // Noon in India.
 function reset(){for(const table of ['voice_attempts','voice_calls','voice_settings','voice_suppression','widget_submissions','widget_events','widget_sessions','widget_visitors','widget_sites','coaching_messages','coaching_bookings','coaching_students','coaching_slots','coaching_settings','operation_alerts','workflow_jobs','leads','memberships','workflows','clients','rate_limits'])sql.exec('DELETE FROM '+table);globalThis.__voiceEnv.ORBIT_VOICE_CONNECTORS_JSON='{}';auth();}
-function fixture({enabled=true,connected=true,demo=false}={}){
- const c=crypto.randomUUID();sql.prepare("INSERT INTO clients(id,name,intake_key_hash,created_at) VALUES(?,'Example Coaching','not-a-key',?)").run(c,NOW);
+function fixture({enabled=true,connected=true,demo=false,id=crypto.randomUUID()}={}){
+ const c=id;sql.prepare("INSERT INTO clients(id,name,intake_key_hash,created_at) VALUES(?,'Example Coaching','not-a-key',?)").run(c,NOW);
  sql.prepare("INSERT INTO memberships(id,client_id,email,user_id,created_at) VALUES(?,?,'member@example.test','member',?)").run(crypto.randomUUID(),c,NOW);
  sql.prepare("INSERT INTO voice_settings(client_id,admin_enabled,client_enabled,test_mode,business_context,role_context,updated_by,updated_at) VALUES(?,?,?,0,'Programming institute with Python and Java courses. Fees need a counsellor.','Follow up on the enquiry and collect the preferred counselling time.','owner',?)").run(c,+enabled,+enabled,NOW);
  if(demo)sql.prepare('INSERT INTO coaching_settings(client_id,is_demo,created_at) VALUES(?,1,?)').run(c,NOW);
@@ -34,6 +34,38 @@ function callbackInfo(payload){const u=new URL(payload.body.webhook_config.url);
 const callback=(info,payload)=>webhook.POST(new Request(base+'/api/voice/webhook/'+info.id+'?token='+info.token,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),{params:Promise.resolve({attempt:info.id})});
 
 test('AI calling: real routes, SQLite transactions, isolated Sarvam transport',async t=>{
+ await t.test('the authorized live-test workspace still honors pause, test mode, hours and daily limits',async()=>{
+  reset();const c=fixture({id:'be29a896-ff9a-4b1c-9bd6-a3b4a2c5418c'});await lead(c);due(c);
+  sql.prepare('UPDATE voice_settings SET test_mode=1,client_enabled=0,daily_limit=1,start_hour=10,end_hour=18 WHERE client_id=?').run(c);
+  const cfg=await voice.getVoiceSettings(c);assert.equal(cfg.test_mode,1);assert.equal(cfg.client_enabled,0);assert.equal(cfg.end_hour,18);assert.equal(cfg.daily_limit,1);
+  await voice.processVoiceCalls(c,async()=>assert.fail('paused test workspace must not dial'),NOW);
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM voice_attempts').get().n,0);
+  sql.prepare("UPDATE voice_calls SET status='test_saved' WHERE client_id=?").run(c);
+  sql.prepare('UPDATE voice_settings SET test_mode=0,client_enabled=1 WHERE client_id=?').run(c);
+  await voice.processVoiceCalls(c,async()=>assert.fail('old test captures must not be promoted by the runner'),NOW);
+  assert.equal(sql.prepare('SELECT status FROM voice_calls').get().status,'test_saved');
+ });
+ await t.test('diagnostic failures stay distinct, private, and never trigger automatic redial',async()=>{
+  const cases=[
+   [async()=>{throw new DOMException('deadline','TimeoutError')},'provider_timeout'],
+   [async()=>{throw new TypeError('fetch failed with sensitive request details')},'provider_network_error'],
+   [async()=>new Response('<html>invalid upstream response</html>'),'provider_response_not_json'],
+   [async()=>Response.json({success:true}),'provider_attempt_id_missing'],
+   [async()=>Response.redirect('https://untrusted.example',307),'provider_http_307'],
+  ];
+  for(const [transport,code] of cases){reset();const c=fixture();await lead(c);due(c);let sends=0;
+   await voice.processVoiceCalls(c,async(...args)=>{sends++;return transport(...args)},NOW);
+   const row=sql.prepare('SELECT * FROM voice_calls').get();assert.equal(row.status,'needs_review');assert.equal(row.error_code,code);
+   await voice.processVoiceCalls(c,async()=>{sends++;return Response.json({attempt_id:'unexpected'})},NOW+60000);assert.equal(sends,1);
+   const details=await (await get(c,'&call='+row.id)).json();assert.equal(details.detail.error_code,code);assert.ok(!JSON.stringify(details).includes('sensitive request details'));
+  }
+ });
+ await t.test('connection diagnostics are owner-only and do not dispatch phone calls',async()=>{
+  reset();const c=fixture();auth('member@example.test','member');assert.equal((await post({action:'checkConnection',client:c})).status,403);
+  auth();const original=globalThis.fetch;let count=0;
+  globalThis.fetch=async(url,options)=>{count++;assert.match(String(url),/\/analytics\/v1\/org-test\/workspace-test\/agent-test\/attempts/);assert.equal(options.method,undefined);assert.equal(options.redirect,'manual');return Response.json({items:[],total:0});};
+  try{const response=await post({action:'checkConnection',client:c});assert.equal(response.status,200);assert.equal((await response.json()).ok,true);assert.equal(count,1);assert.equal(sql.prepare('SELECT COUNT(*) n FROM voice_attempts').get().n,0);}finally{globalThis.fetch=original;}
+ });
  await t.test('incomplete extraction retains the transcript for review without a redial',async()=>{
   for(const variables of [null,{outcome:'unknown',summary:'',do_not_call:'false'},{outcome:'interested',summary:'Python enquiry.'},{outcome:'interested',summary:' ',do_not_call:false}]){
    reset();const c=fixture();await lead(c);due(c);const mock=capture();await voice.processVoiceCalls(c,mock.transport,NOW);

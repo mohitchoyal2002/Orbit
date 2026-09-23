@@ -82,3 +82,11 @@ If a call remains `needs_review`, inspect Sarvam's attempt history before any ne
 - [Variables and personalisation](https://docs.sarvam.ai/conversations/build/variables-personalization)
 - [Telephony](https://docs.sarvam.ai/conversations/deploy/telephony)
 - [Model API speech](https://docs.sarvam.ai/api-reference/text-to-speech/convert)
+
+## Dispatch diagnostics
+
+Admin → AI calling → Agent setup → **Check Sarvam connection** makes a read-only request from the deployed Worker to Sarvam analytics, using the selected client connector. It checks the saved key and agent access without placing a call. A successful check does not validate the telephony number, outbound delivery or output extraction.
+
+Dispatch errors distinguish `provider_timeout`, `provider_network_error`, `provider_connection_error`, `provider_runtime_error`, `provider_response_not_json`, `provider_attempt_id_missing` and `provider_http_<status>`. No raw provider body or request credentials are logged. Redirects are not followed. Unknown/ambiguous attempts remain in review without automatic retry.
+
+The owner-authorized Programmer's Point live-test workspace now honors the same stored pause, test-mode, calling-hour and daily-limit settings as other workspaces. Historical test captures are not promoted by the runner.

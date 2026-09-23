@@ -3,7 +3,7 @@ import { database, runtimeConfig } from "@/db/connection";
 import { body,clientAccess,endpoint,HttpError,identity,reply } from "@/lib/operations-access";
 import { openingLine,SARVAM_AGENT_TEMPLATE,voiceContextSchema } from "@/lib/voice-shared";
 import { getVoiceSettings,isDemoClient,processVoiceCalls,suppressVoiceContact } from "@/lib/voice";
-import { voiceConnector } from "@/lib/voice-sarvam";
+import { CallProviderError,checkSarvamConnection,voiceConnector } from "@/lib/voice-sarvam";
 
 export const GET=(request:Request)=>endpoint(async()=>{
   const user=await identity(),db=database(),url=new URL(request.url),client=url.searchParams.get("client");
@@ -15,7 +15,7 @@ export const GET=(request:Request)=>endpoint(async()=>{
   const page=Number(url.searchParams.get("page")||0);if(!Number.isInteger(page)||page<0||page>10000)throw new HttpError(400,"Invalid page.");
   const call=url.searchParams.get("call");
   const cutoff=Date.now()-90*86400000;
-  const detail=call?await db.prepare("SELECT v.id,v.status,v.outcome,CASE WHEN v.updated_at>=? THEN v.summary END AS summary,CASE WHEN v.updated_at>=? THEN v.answers END AS answers,l.name,v.phone,v.created_at FROM voice_calls v JOIN leads l ON l.id=v.lead_id AND l.client_id=v.client_id WHERE v.id=? AND v.client_id=?").bind(cutoff,cutoff,call,client).first():null;
+  const detail=call?await db.prepare("SELECT v.id,v.status,v.error_code,v.outcome,CASE WHEN v.updated_at>=? THEN v.summary END AS summary,CASE WHEN v.updated_at>=? THEN v.answers END AS answers,l.name,v.phone,v.created_at FROM voice_calls v JOIN leads l ON l.id=v.lead_id AND l.client_id=v.client_id WHERE v.id=? AND v.client_id=?").bind(cutoff,cutoff,call,client).first():null;
   if(call&&!detail)throw new HttpError(404,"Call unavailable.");
   const attempts=call?await db.prepare("SELECT attempt_number,status,duration,CASE WHEN started_at>=? THEN transcript END AS transcript,started_at,finished_at FROM voice_attempts WHERE call_id=? AND client_id=? ORDER BY attempt_number").bind(cutoff,call,client).all():null;
   const [rows,totals]=await Promise.all([
@@ -35,11 +35,24 @@ const schema=z.discriminatedUnion("action",[
   z.object({action:z.literal("stop"),client,call:z.string().regex(/^[a-f0-9]{64}$/)}).strict(),
   z.object({action:z.literal("process"),client}).strict(),
   z.object({action:z.literal("voicePreview"),client}).strict(),
+  z.object({action:z.literal("runnerSecret"),client}).strict(),
+  z.object({action:z.literal("checkConnection"),client}).strict(),
 ]);
 export const POST=(request:Request)=>endpoint(async()=>{
   const data=await body(request,schema,20000),{user,client}=await clientAccess(data.client),db=database(),now=Date.now();
-  if((data.action==="admin"||data.action==="process")&&!user.owner)throw new HttpError(403,"Only the studio owner can manage call access and limits.");
+  if((data.action==="admin"||data.action==="process"||data.action==="runnerSecret"||data.action==="checkConnection")&&!user.owner)throw new HttpError(403,"Only the studio owner can manage call access and limits.");
+  if(data.action==="checkConnection") {
+    const connector=voiceConnector(data.client);
+    if(!connector)throw new HttpError(409,"Complete the Sarvam connection first.");
+    try{return reply(await checkSarvamConnection(connector));}
+    catch(error){if(error instanceof CallProviderError)return reply({ok:false,code:error.code});throw error;}
+  }
   if(data.action==="process")return reply({ok:true,processed:await processVoiceCalls(data.client)});
+  if(data.action==="runnerSecret") {
+    const token=runtimeConfig().ORBIT_RUNNER_TOKEN;
+    if(!token)throw new HttpError(409,"Runner token is not configured in the site environment.");
+    return reply({ok:true,runnerToken:token});
+  }
   if(data.action==="stop") {
     const row=await db.prepare("SELECT phone FROM voice_calls WHERE id=? AND client_id=?").bind(data.call,data.client).first<{phone:string}>();
     if(!row)throw new HttpError(404,"Call unavailable.");

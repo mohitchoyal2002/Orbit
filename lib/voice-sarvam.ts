@@ -20,19 +20,44 @@ export function voiceConnector(client:string):VoiceConnector|null {
 export class CallProviderError extends Error {
   constructor(public code:string,public review:boolean){super(code);}
 }
+function transportFailure(error:unknown) {
+  const name=error instanceof Error?error.name:"UnknownError";
+  const message=error instanceof Error?error.message:"";
+  const code=name==="TimeoutError"||name==="AbortError"?"provider_timeout"
+    :/illegal invocation/i.test(message)?"provider_runtime_error"
+    :/redirect/i.test(message)?"provider_redirect"
+    :/dns|resolve|certificate|ssl|tls/i.test(message)?"provider_connection_error":"provider_network_error";
+  // Never log credentials, request bodies, callback URLs or provider response text.
+  console.error("Sarvam request failed",{code,errorType:name});
+  return new CallProviderError(code,true);
+}
+async function providerJson(response:Response) {
+  if(!response.ok)throw new CallProviderError(`provider_http_${response.status}`,response.status>=500||response.status===408||response.status>=300&&response.status<400);
+  try{return await response.json() as unknown;}catch{throw new CallProviderError("provider_response_not_json",true);}
+}
+// Read-only production check: verifies the saved key and agent scope without dialing.
+export async function checkSarvamConnection(c:VoiceConnector,transport:typeof fetch=fetch,now=Date.now()) {
+  const url=new URL(`https://apps.sarvam.ai/api/analytics/v1/${encodeURIComponent(c.orgId)}/${encodeURIComponent(c.workspaceId)}/${encodeURIComponent(c.appId)}/attempts`);
+  url.searchParams.set("start_datetime",new Date(now-60000).toISOString());
+  url.searchParams.set("end_datetime",new Date(now).toISOString());url.searchParams.set("limit","1");
+  let response:Response;
+  try{response=await transport(url,{headers:{"X-API-Key":c.apiKey,Accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(20000)});}catch(error){throw transportFailure(error);}
+  const data=z.object({items:z.array(z.unknown()),total:z.number()}).safeParse(await providerJson(response));
+  if(!data.success)throw new CallProviderError("provider_response_invalid",true);
+  return {ok:true};
+}
 export async function placeSarvamCall(c:VoiceConnector,settings:VoiceSettings,lead:{name:string;brief:string;phone:string},businessName:string,webhookUrl:string,attemptId:string,transport:typeof fetch=fetch) {
   const url=`https://apps.sarvam.ai/api/outbounds/v1/orgs/${encodeURIComponent(c.orgId)}/workspaces/${encodeURIComponent(c.workspaceId)}/outbounds`;
   let response:Response;
   try {
-    response=await transport(url,{method:"POST",headers:{"X-API-Key":c.apiKey,"Content-Type":"application/json"},redirect:"error",signal:AbortSignal.timeout(12000),body:JSON.stringify({
+    response=await transport(url,{method:"POST",headers:{"X-API-Key":c.apiKey,"Content-Type":"application/json",Accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(12000),body:JSON.stringify({
       app_config:{app_id:c.appId,app_version:c.appVersion,connection_config:{connection_id:c.connectionId,agent_phone_number:c.agentPhoneNumber},agent_variables:voiceVariables(settings,lead,businessName),app_overrides:{initial_bot_message:openingLine(businessName,settings.language),initial_language_name:settings.language}},
       user_config:{user_phone_number:lead.phone},webhook_config:{url:webhookUrl,metadata:{orbit_attempt_id:attemptId}},
     })});
-  }catch{throw new CallProviderError("provider_result_unknown",true);}
-  if(!response.ok)throw new CallProviderError(`provider_http_${response.status}`,response.status>=500||response.status===408);
-  let data:unknown;try{data=await response.json();}catch{throw new CallProviderError("provider_result_unknown",true);}
+  }catch(error){throw transportFailure(error);}
+  const data=await providerJson(response);
   const result=z.object({attempt_id:z.string().min(1).max(200)}).safeParse(data);
-  if(!result.success)throw new CallProviderError("provider_result_unknown",true);
+  if(!result.success)throw new CallProviderError("provider_attempt_id_missing",true);
   return result.data.attempt_id;
 }
 

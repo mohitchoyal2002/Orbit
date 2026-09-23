@@ -4,6 +4,8 @@
 
 ORBIT Studio is a production-minded AI automation agency website for ambitious businesses. It combines a cinematic, motion-aware landing page with an owner-only enquiry inbox backed by Cloudflare D1.
 
+For the complete sanitized product history, architecture, deployment shape, current provider state and next-work handoff, see [OrbitFlow project context](docs/PROJECT-CONTEXT.md).
+
 The client-operations implementation adds a secure `/portal` with leads, follow-up tracking, reusable workflows, persistent retries/alerts, onboarding, reporting and client-approved case-study drafts. See [client operations setup and limits](docs/CLIENT-OPERATIONS.md). These changes need a release and configured providers before they operate on the live site.
 
 **Live site:** [orbit-automation-studio.mohitchoyal2002.chatgpt.site](https://orbit-automation-studio.mohitchoyal2002.chatgpt.site)<br />

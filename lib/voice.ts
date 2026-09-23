@@ -3,6 +3,7 @@ import { hashValue } from "@/lib/enquiries";
 import { HttpError } from "@/lib/operations-access";
 import { callOutcomes, defaultVoiceSettings, nextCallTime, voiceVariables, type VoiceSettings } from "./voice-shared";
 import { CallProviderError, placeSarvamCall, voiceConnector, type SarvamResult } from "./voice-sarvam";
+import { DEMO_CLIENT } from "./coaching-shared";
 
 const DAY=86400000;
 type Lead={id:string;name:string;brief:string;phone:string;client_id:string;call_consent_at:number|null;call_consent_evidence:string;opted_out_at:number|null;status:string;created_at:number};
@@ -17,6 +18,7 @@ export async function getVoiceSettings(client:string) {
   return defaults;
 }
 export async function isDemoClient(client:string) {
+  if(client===DEMO_CLIENT)return false;
   return !!await database().prepare("SELECT client_id FROM coaching_settings WHERE client_id=? AND is_demo=1").bind(client).first();
 }
 export async function queueVoiceCall(client:string,leadId:string,now=Date.now()) {
@@ -60,7 +62,7 @@ export async function processVoiceCalls(client?:string,transport:typeof fetch=fe
     WHERE v.status='queued' AND v.next_at<=?${client?" AND v.client_id=?":""}
     AND s.admin_enabled=1 AND s.client_enabled=1 AND s.test_mode=0
     AND NOT EXISTS(SELECT 1 FROM voice_calls busy WHERE busy.client_id=v.client_id AND busy.status IN('dispatching','awaiting_result'))
-    AND (SELECT COUNT(*) FROM voice_attempts a WHERE a.client_id=v.client_id AND a.started_at>=? AND a.started_at<?)<s.daily_limit
+      AND (SELECT COUNT(*) FROM voice_attempts a WHERE a.client_id=v.client_id AND a.started_at>=? AND a.started_at<?)<s.daily_limit
   ) WHERE position=1 ORDER BY next_at,id LIMIT 2`).bind(now,...params,dayStart,dayStart+DAY).all<Call>();
   const processed:{id:string;status:string}[]=[];
   for(const call of rows.results) {
