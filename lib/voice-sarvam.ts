@@ -51,7 +51,7 @@ export async function placeSarvamCall(c:VoiceConnector,settings:VoiceSettings,le
   let response:Response;
   try {
     response=await transport(url,{method:"POST",headers:{"X-API-Key":c.apiKey,"Content-Type":"application/json",Accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(12000),body:JSON.stringify({
-      app_config:{app_id:c.appId,app_version:c.appVersion,connection_config:{connection_id:c.connectionId,agent_phone_number:c.agentPhoneNumber},agent_variables:voiceVariables(settings,lead,businessName),app_overrides:{initial_bot_message:openingLine(businessName,settings.language),initial_language_name:settings.language}},
+      app_config:{app_id:c.appId,app_version:c.appVersion,app_type:"agent",connection_config:{connection_id:c.connectionId,agent_phone_number:c.agentPhoneNumber},agent_variables:voiceVariables(settings,lead,businessName),app_overrides:{initial_bot_message:openingLine(businessName,settings.language),initial_language_name:settings.language}},
       user_config:{user_phone_number:lead.phone},webhook_config:{url:webhookUrl,metadata:{orbit_attempt_id:attemptId}},
     })});
   }catch(error){throw transportFailure(error);}

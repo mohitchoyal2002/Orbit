@@ -24,8 +24,8 @@ export const GET=(request:Request)=>endpoint(async()=>{
   ]);
   const heartbeat=await db.prepare("SELECT expires_at FROM rate_limits WHERE key='voice-runner-heartbeat'").first<{expires_at:number}>();
   const runnerReady=!!runtimeConfig().ORBIT_RUNNER_TOKEN&&!!heartbeat&&heartbeat.expires_at>Date.now();
-  const issues=[...(demo?["Demo workspace: real calls are disabled."]:[]),...(!connector?["Admin must connect a Sarvam Voice Agent and calling number."]:[]),...(!runnerReady?["The scheduled calling runner is not connected or has stopped. Ask your admin to check it."]:[]),...(!cfg.business_context||!cfg.role_context?["Save the business context and call purpose."]:[])];
-  return reply({owner:access.user.owner,client:access.client,settings:cfg,demo,connectionReady:!!connector,voicePreviewReady:!!runtimeConfig().ORBIT_SARVAM_KEY,issues,template:access.user.owner?SARVAM_AGENT_TEMPLATE:undefined,opening:openingLine(access.client.name,cfg.language),calls:rows.results.slice(0,25),hasMore:rows.results.length>25,page,totals,detail:detail?{...detail,answers:JSON.parse(String(detail.answers||"{}")),attempts:attempts?.results.map(a=>({...a,transcript:a.transcript?JSON.parse(String(a.transcript)):null}))}:null});
+  const issues=[...(demo?["Demo workspace: real calls are disabled."]:[]),...(!connector?["Admin must connect a Sarvam Voice Agent and calling number."]:[]),...(!cfg.business_context||!cfg.role_context?["Save the business context and call purpose."]:[])];
+  return reply({owner:access.user.owner,client:access.client,settings:cfg,demo,connectionReady:!!connector,runnerReady,voicePreviewReady:!!runtimeConfig().ORBIT_SARVAM_KEY,issues,template:access.user.owner?SARVAM_AGENT_TEMPLATE:undefined,opening:openingLine(access.client.name,cfg.language),calls:rows.results.slice(0,25),hasMore:rows.results.length>25,page,totals,detail:detail?{...detail,answers:JSON.parse(String(detail.answers||"{}")),attempts:attempts?.results.map(a=>({...a,transcript:a.transcript?JSON.parse(String(a.transcript)):null}))}:null});
 });
 const client=z.string().uuid(),revision=z.number().int().nonnegative();
 const schema=z.discriminatedUnion("action",[
@@ -92,8 +92,6 @@ export const POST=(request:Request)=>endpoint(async()=>{
       if(cfg.test_mode)throw new HttpError(409,"The owner must switch this workspace from test capture to live mode first.");
       if(await isDemoClient(data.client))throw new HttpError(409,"This demo workspace cannot make real phone calls.");
       if(!voiceConnector(data.client)||!voiceContextSchema.safeParse({businessContext:cfg.business_context,roleContext:cfg.role_context,language:cfg.language}).success)throw new HttpError(409,"Complete the calling connection and business context before activation.");
-      const heartbeat=await db.prepare("SELECT expires_at FROM rate_limits WHERE key='voice-runner-heartbeat'").first<{expires_at:number}>();
-      if(!runtimeConfig().ORBIT_RUNNER_TOKEN||!heartbeat||heartbeat.expires_at<=now)throw new HttpError(409,"Connect the scheduled runner before activating calls.");
     }
     changed=await db.prepare("UPDATE voice_settings SET client_enabled=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(+data.enabled,now,user.id,data.client,data.revision).first();
   }
