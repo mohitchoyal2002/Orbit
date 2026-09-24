@@ -3,6 +3,7 @@ import "./globals.css";
 import "./refinement.css";
 import "./experience.css";
 import "./glass.css";
+import "./motion.css";
 import { ExperienceProvider } from "@/components/experience-provider";
 
 export const metadata: Metadata = {

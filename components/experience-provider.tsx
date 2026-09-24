@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { Pause, Play } from "lucide-react";
+import MotionOrchestrator from "./motion-orchestrator";
 
 const Experience = createContext({ motion: false, toggleMotion: () => {} });
 export const useExperience = () => useContext(Experience);
@@ -71,6 +72,7 @@ export function ExperienceProvider({ children }: { children: ReactNode }) {
   }
   return <Experience.Provider value={{ motion, toggleMotion }}>
     {children}
+    <MotionOrchestrator motion={motion}/>
     <button className="experience-motion" onClick={toggleMotion} aria-pressed={motion} aria-label={motion ? "Pause animations" : "Enable animations (respects reduced motion)"}>
       {motion ? <Pause size={14}/> : <Play size={14}/>}<span>{motion ? "Motion on" : "Motion off"}</span>
     </button>

@@ -13,8 +13,6 @@ import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from 
 import { Table,TableBody,TableCell,TableHead,TableHeader,TableRow } from "@/components/ui/table";
 import type { SiteNavigation } from "@/lib/site-domains";
 import { VOICE_LANGUAGES,type VoiceSettings } from "@/lib/voice-shared";
-import { animate,stagger } from "animejs";
-import { useExperience } from "@/components/experience-provider";
 
 type Client={id:string;name:string};
 type Call={id:string;name:string;phone:string;status:string;attempts:number;next_at:number;outcome:string|null;error_code:string|null;created_at:number};
@@ -41,7 +39,6 @@ Object.assign(errors,{
 function statusText(c:Call){return c.status==="queued"?`Scheduled for ${time(c.next_at)} IST`:c.error_code?errors[c.error_code]||"Call needs review — ask the owner to check Sarvam":human(c.outcome);}
 
 export default function CallingDashboard({navigation}:{navigation:SiteNavigation}) {
-  const {motion}=useExperience();
   const surface=useRef<HTMLElement>(null);
   const [clients,setClients]=useState<Client[]>([]),[owner,setOwner]=useState(false),[client,setClient]=useState(""),[data,setData]=useState<Data|null>(null),[page,setPage]=useState(0),[call,setCall]=useState(""),[confirmCall,setConfirmCall]=useState<Call|null>(null),[tab,setTab]=useState("activity");
   const [loading,setLoading]=useState(true),[busy,setBusy]=useState(false),[error,setError]=useState(""),[notice,setNotice]=useState(""),[audio,setAudio]=useState(""),[runnerToken,setRunnerToken]=useState("");
@@ -55,7 +52,6 @@ export default function CallingDashboard({navigation}:{navigation:SiteNavigation
   },[client,page,call]);
   useEffect(()=>{void load();return()=>{sequence.current++;};},[load]);
   useEffect(()=>{if(tab!=="activity"||busy||!client)return;const timer=setInterval(()=>{if(document.visibilityState==="visible")void load(true);},20000);return()=>clearInterval(timer);},[load,tab,busy,client]);
-  useEffect(()=>{if(!motion||!data||!surface.current)return;const cards=surface.current.querySelectorAll(".voice-metrics .voice-card");const rows=surface.current.querySelectorAll(".voice-table tbody tr");const effects=[animate(cards,{opacity:[0,1],y:[12,0],duration:480,delay:stagger(70),ease:"out(3)"}),animate(rows,{opacity:[0,1],x:[14,0],duration:420,delay:stagger(45),ease:"out(3)"})];return()=>effects.forEach(effect=>effect.revert());},[motion,client,page,tab,!!data]);
   async function act(payload:Record<string,unknown>,message:string) {
     if(busy)return null;const current=client;setBusy(true);setError("");setNotice("");
     try{const r=await fetch("/api/voice",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client,...payload}),signal:AbortSignal.timeout(60000)});const j=await r.json() as Result;if(!r.ok)throw Error(j.error||"Unable to save.");if(j.ok===false)throw Error((j.code&&errors[j.code])||"Sarvam connection check failed. Ask the owner to review.");if(activeClient.current===current){setNotice(payload.action==="process"?j.processed?.length?`Checked ${j.processed.length} due call${j.processed.length===1?"":"s"}. Refresh to see the result.`:"No call is due yet. Check the scheduled time beside each queued contact.":message);await load(true);}return j;}

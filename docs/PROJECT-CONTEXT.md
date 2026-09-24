@@ -392,3 +392,13 @@ This document captures product context, not credentials and not a substitute for
 1. Treat security and consent constraints here as mandatory.
 2. Inspect the deployed code and live state.
 3. Update the implementation and this document together after a verified decision.
+
+## 18. Shared motion and 3D design — September 24, 2026
+
+The marketing site uses a graphite, chrome and copper visual system with readable display type and frosted surfaces. Three procedural Three.js sculptures represent an orbital system, a connected signal network and a flowing ring tunnel. Anime.js synchronizes model rotation and camera movement with section scrolling; existing cinematic films and the labelled simulated coaching story remain available.
+
+`components/motion-orchestrator.tsx` supplies shared section reveals, process progress, tab-panel entrances and pointer/keyboard action feedback across marketing, administration and client workspaces. It adds no analytics events and does not change form submission, calling eligibility or authorization behavior.
+
+Scenes load near the viewport, cap pixel density, stop continuous rendering when hidden or off screen, and dispose GPU resources on unmount. Data Saver uses the poster. Missing WebGL or a lost graphics context also falls back to the poster. The existing persistent motion control and system reduced-motion preference disable animated behavior while retaining content.
+
+Keep dashboard motion subtle, preserve readable tables, and retain the single shared motion controller rather than adding competing per-page reveal effects. GPU-disabled preview environments can validate the fallback and interactions but cannot visually validate the rendered 3D materials.
