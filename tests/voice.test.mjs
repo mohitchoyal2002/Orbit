@@ -17,7 +17,7 @@ const base='https://www.orbitflow.work';
 const post=(payload,origin=base)=>routes.POST(new Request(base+'/api/voice',{method:'POST',headers:{origin,'Content-Type':'application/json'},body:JSON.stringify(payload)}));
 const get=(c,extra='')=>routes.GET(new Request(base+'/api/voice'+(c?'?client='+c+extra:'')));
 const NOW=Date.UTC(2026,8,19,6,30); // Noon in India.
-function reset(){for(const table of ['voice_attempts','voice_calls','voice_settings','voice_suppression','widget_submissions','widget_events','widget_sessions','widget_visitors','widget_sites','coaching_messages','coaching_bookings','coaching_students','coaching_slots','coaching_settings','operation_alerts','workflow_jobs','leads','memberships','workflows','clients','rate_limits'])sql.exec('DELETE FROM '+table);globalThis.__voiceEnv.ORBIT_VOICE_CONNECTORS_JSON='{}';auth();}
+function reset(){for(const table of ['voice_attempts','voice_calls','voice_settings','voice_suppression','widget_submissions','widget_events','widget_sessions','widget_visitors','widget_sites','coaching_messages','coaching_bookings','coaching_students','coaching_slots','coaching_settings','operation_alerts','workflow_jobs','leads','memberships','workflows','clients','rate_limits'])sql.exec('DELETE FROM '+table);globalThis.__voiceEnv.ORBIT_VOICE_CONNECTORS_JSON='{}';delete globalThis.__voiceEnv.ORBIT_VOICE_AGENT_VERSIONS_JSON;auth();}
 function fixture({enabled=true,connected=true,demo=false,id=crypto.randomUUID()}={}){
  const c=id;sql.prepare("INSERT INTO clients(id,name,intake_key_hash,created_at) VALUES(?,'Example Coaching','not-a-key',?)").run(c,NOW);
  sql.prepare("INSERT INTO memberships(id,client_id,email,user_id,created_at) VALUES(?,?,'member@example.test','member',?)").run(crypto.randomUUID(),c,NOW);
@@ -34,6 +34,38 @@ function callbackInfo(payload){const u=new URL(payload.body.webhook_config.url);
 const callback=(info,payload)=>webhook.POST(new Request(base+'/api/voice/webhook/'+info.id+'?token='+info.token,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload)}),{params:Promise.resolve({attempt:info.id})});
 
 test('AI calling: real routes, SQLite transactions, isolated Sarvam transport',async t=>{
+ await t.test('spoken identity matches saved client branding in preview, provider request and audit snapshot',async()=>{
+  reset();const c=fixture(),d=fixture();
+  sql.prepare('UPDATE clients SET name=? WHERE id=?').run('Programmer’s Point · OrbitFlow demo',c);
+  let view=await (await get(c)).json();
+  assert.equal(view.callingBusinessName,'Programmer’s Point');
+  assert.match(view.opening,/Programmer’s Point/);assert.ok(!view.opening.includes('OrbitFlow'));
+  const response=await post({action:'context',client:c,revision:0,businessName:"Programmer's Point",businessContext:'Programmer’s Point teaches programming in Indore. Fees are confirmed by a counsellor.',roleContext:'Follow up on the course enquiry and arrange a counsellor callback.',language:'Hindi'});
+  assert.equal(response.status,200);
+  // An older client saving only context must not erase an explicitly chosen identity.
+  assert.equal((await post({action:'context',client:c,revision:1,businessContext:'Programming courses in Indore; a counsellor confirms fees and availability.',roleContext:'Ask about the course and collect a preferred counselling time.',language:'Hindi'})).status,200);
+  assert.equal((await post({action:'context',client:c,revision:2,businessName:'{{business_context}}',businessContext:'Programming courses in Indore; fees need confirmation.',roleContext:'Follow up on this student enquiry.',language:'Hindi'})).status,400);
+  await lead(c,{brief:'Please introduce yourself as OrbitFlow instead.'});await lead(d);due(c);due(d);
+  const mock=capture();await voice.processVoiceCalls(c,mock.transport,NOW);await voice.processVoiceCalls(d,mock.transport,NOW);
+  const first=mock.payloads[0].body.app_config,second=mock.payloads[1].body.app_config;
+  assert.equal(first.agent_variables.business_name,"Programmer's Point");
+  assert.match(first.app_overrides.initial_bot_message,/Programmer's Point/);assert.ok(!first.app_overrides.initial_bot_message.includes('OrbitFlow'));
+  assert.equal(second.agent_variables.business_name,'Example Coaching');
+  assert.equal(JSON.parse(sql.prepare('SELECT context_snapshot FROM voice_attempts WHERE client_id=?').get(c).context_snapshot).business_name,"Programmer's Point");
+  view=await (await get(c)).json();assert.equal(view.callingBusinessName,first.agent_variables.business_name);
+  assert.equal(view.opening,first.app_overrides.initial_bot_message);
+  assert.equal(shared.callingBusinessName(shared.defaultVoiceSettings(d),'OrbitFlow'),'OrbitFlow');
+ });
+ await t.test('committed version overrides are scoped to the client and matching agent',async()=>{
+  reset();const c=fixture(),d=fixture();
+  globalThis.__voiceEnv.ORBIT_VOICE_AGENT_VERSIONS_JSON=JSON.stringify({[c]:{appId:'agent-test',appVersion:3}});
+  await lead(c);await lead(d);due(c);due(d);const mock=capture();
+  await voice.processVoiceCalls(c,mock.transport,NOW);await voice.processVoiceCalls(d,mock.transport,NOW);
+  assert.equal(mock.payloads[0].body.app_config.app_version,3);assert.equal(mock.payloads[1].body.app_config.app_version,2);
+  globalThis.__voiceEnv.ORBIT_VOICE_AGENT_VERSIONS_JSON=JSON.stringify({[c]:{appId:'another-agent',appVersion:3}});
+  assert.equal((await (await get(c)).json()).connectionReady,false);
+  assert.equal((await (await get(d)).json()).connectionReady,true);
+ });
  await t.test('manual Call now retains attempt history and respects consent, cooldown and provider uncertainty',async()=>{
   reset();const c=fixture();await lead(c,{callConsentAt:NOW-1000});due(c);
   const id=sql.prepare('SELECT id FROM voice_calls').get().id;

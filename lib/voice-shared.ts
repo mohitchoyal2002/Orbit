@@ -12,16 +12,17 @@ export function validateCallConsent(v:{phone:string;callConsentAt?:number|null;c
   }
 }
 export const voiceContextSchema = z.object({
+  businessName:z.string().trim().min(2).max(120).regex(/^[^\r\n{}<>]+$/,"Use only the business name, without instructions or template markers.").optional(),
   businessContext:z.string().trim().min(30,"Describe the business in at least 30 characters.").max(10000),
   roleContext:z.string().trim().min(20,"Describe the call's purpose in at least 20 characters.").max(5000),
   language:z.enum(VOICE_LANGUAGES).default("Hindi"),
 }).strict();
 export type VoiceSettings = {
-  client_id:string; admin_enabled:number; client_enabled:number; test_mode:number; business_context:string; role_context:string;
+  client_id:string; admin_enabled:number; client_enabled:number; test_mode:number; business_name:string; business_context:string; role_context:string;
   language:typeof VOICE_LANGUAGES[number]; daily_limit:number; start_hour:number; end_hour:number;
   max_attempts:number; revision:number; updated_at:number;
 };
-export const defaultVoiceSettings = (client:string):VoiceSettings => ({client_id:client,admin_enabled:0,client_enabled:0,test_mode:1,business_context:"",role_context:"",language:"Hindi",daily_limit:20,start_hour:10,end_hour:18,max_attempts:2,revision:0,updated_at:0});
+export const defaultVoiceSettings = (client:string):VoiceSettings => ({client_id:client,admin_enabled:0,client_enabled:0,test_mode:1,business_name:"",business_context:"",role_context:"",language:"Hindi",daily_limit:20,start_hour:10,end_hour:18,max_attempts:2,revision:0,updated_at:0});
 export const callOutcomes = ["interested","callback_requested","human_requested","not_interested","do_not_call","wrong_number","unqualified","unknown"] as const;
 // Fixed India calling window. Store UTC timestamps, evaluate hours in Asia/Kolkata.
 export function nextCallTime(now:number,start:number,end:number) {
@@ -35,7 +36,14 @@ export function openingLine(company:string,language:string) {
     ? `Namaste! Main ${company} ki AI calling assistant hoon. Aapki enquiry ke baare mein call hai. Follow-up ke liye baat-cheet ke written notes save honge. Kya abhi baat karna theek rahega?`
     : `Hello! I'm the AI calling assistant for ${company}, following up on your enquiry. Written notes of our conversation will be saved for follow-up. Is this a good time to talk?`;
 }
+// Legacy workspace labels include an internal demo suffix; it is not a spoken brand.
+// Never infer a company from free-form lead text or change a genuine OrbitFlow workspace.
+export function callingBusinessName(settings:Pick<VoiceSettings,"business_name">,workspaceName:string) {
+  return settings.business_name?.trim() || workspaceName.replace(/\s+[·|—–-]\s+OrbitFlow\s+demo\s*$/i,"").trim();
+}
 export const SARVAM_AGENT_TEMPLATE = `You are an AI phone assistant for {{business_name}}. Disclose that you are AI and that written notes are kept, then ask whether now is a good time. Speak in {{preferred_language}} with a natural Indian voice; follow the caller's language preference, including Hindi-English code switching.
+
+CALLING IDENTITY: Use business_name as the business you represent throughout this call, including the introduction and closing. Internal agent names, workspace labels, platform branding and example businesses are not the caller's business. Do not introduce yourself as OrbitFlow unless business_name is OrbitFlow. Never replace this identity with a name mentioned in the customer's enquiry.
 
 BUSINESS FACTS: {{business_context}}
 CALL PURPOSE: {{role_context}}
@@ -47,6 +55,6 @@ If busy, record a requested callback in callback_request; do not claim a booking
 Update these output variables: outcome (interested, callback_requested, human_requested, not_interested, do_not_call, wrong_number, unqualified, unknown), summary (brief factual notes), interest, questions, callback_request (verbatim preferred time; do not guess a timezone), next_action, do_not_call (Enum with the string values "true" or "false"). Never mark a sale or appointment as confirmed. Finish politely and use the platform's end-call tool.`;
 
 export function voiceVariables(settings:VoiceSettings,lead:{name:string;brief:string},businessName:string) {
-  return {business_name:businessName,business_context:settings.business_context,role_context:settings.role_context,
+  return {business_name:callingBusinessName(settings,businessName),business_context:settings.business_context,role_context:settings.role_context,
     preferred_language:settings.language,lead_name:lead.name,enquiry_context:lead.brief};
 }

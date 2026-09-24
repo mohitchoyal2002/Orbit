@@ -14,7 +14,15 @@ export function voiceConnector(client:string):VoiceConnector|null {
     const env=runtimeConfig(),{useOrbitKey,...config}=JSON.parse(env.ORBIT_VOICE_CONNECTORS_JSON||"{}")[client];
     if(useOrbitKey!==undefined&&useOrbitKey!==true)return null;
     if(useOrbitKey){if(config.apiKey)return null;config.apiKey=env.ORBIT_SARVAM_VOICE_KEY;}
-    return connectorSchema.parse(config);
+    const connector=connectorSchema.parse(config);
+    // Version pins can be updated without replacing or exposing stored connector secrets.
+    const pin=JSON.parse(env.ORBIT_VOICE_AGENT_VERSIONS_JSON||"{}")[client];
+    if(pin!==undefined){
+      const version=z.object({appId:identifier,appVersion:z.number().int().positive()}).strict().parse(pin);
+      if(version.appId!==connector.appId)return null;
+      connector.appVersion=version.appVersion;
+    }
+    return connector;
   }catch{return null;}
 }
 export class CallProviderError extends Error {
@@ -47,11 +55,12 @@ export async function checkSarvamConnection(c:VoiceConnector,transport:typeof fe
   return {ok:true};
 }
 export async function placeSarvamCall(c:VoiceConnector,settings:VoiceSettings,lead:{name:string;brief:string;phone:string},businessName:string,webhookUrl:string,attemptId:string,transport:typeof fetch=fetch) {
+  const variables=voiceVariables(settings,lead,businessName);
   const url=`https://apps.sarvam.ai/api/outbounds/v1/orgs/${encodeURIComponent(c.orgId)}/workspaces/${encodeURIComponent(c.workspaceId)}/outbounds`;
   let response:Response;
   try {
     response=await transport(url,{method:"POST",headers:{"X-API-Key":c.apiKey,"Content-Type":"application/json",Accept:"application/json"},redirect:"manual",signal:AbortSignal.timeout(12000),body:JSON.stringify({
-      app_config:{app_id:c.appId,app_version:c.appVersion,app_type:"agent",connection_config:{connection_id:c.connectionId,agent_phone_number:c.agentPhoneNumber},agent_variables:voiceVariables(settings,lead,businessName),app_overrides:{initial_bot_message:openingLine(businessName,settings.language),initial_language_name:settings.language}},
+      app_config:{app_id:c.appId,app_version:c.appVersion,app_type:"agent",connection_config:{connection_id:c.connectionId,agent_phone_number:c.agentPhoneNumber},agent_variables:variables,app_overrides:{initial_bot_message:openingLine(variables.business_name,settings.language),initial_language_name:settings.language}},
       user_config:{user_phone_number:lead.phone},webhook_config:{url:webhookUrl,metadata:{orbit_attempt_id:attemptId}},
     })});
   }catch(error){throw transportFailure(error);}

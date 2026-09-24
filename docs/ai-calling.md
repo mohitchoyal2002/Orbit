@@ -2,6 +2,10 @@
 
 The admin allows calling per client. A client saves business facts and a calling purpose at `/calling`, chooses a starting language, then activates the assistant. Each new enquiry must include separate, explicit AI-call consent. Sarvam Voice Agents handles ASR, conversation, Indian speech and its connected telephony provider. OrbitFlow handles authorisation, intake, scheduling, results and reporting.
 
+The **Business name spoken on calls** field controls the client identity independently of internal workspace labels. It is used consistently in the displayed introduction, outbound greeting, `business_name` input variable and immutable attempt context snapshot. Legacy labels ending in ` · OrbitFlow demo` omit that internal suffix until an explicit business name is saved. Saving from an older dashboard without this field preserves the existing identity. Business context supplies facts; customer enquiry text never selects the business identity.
+
+The committed Sarvam agent must also use its real `business_name` variable in the greeting and instructions. A hardcoded provider greeting or stale committed version cannot be repaired solely by editing dashboard facts. The optional server setting `ORBIT_VOICE_AGENT_VERSIONS_JSON` maps a client UUID to `{ "appId": "EXISTING_AGENT_ID", "appVersion": 3 }` and overrides only that matching connector’s version, preserving its existing secret and telephony configuration. A mismatched agent ID fails closed. Verify the client's connector uses the corrected committed version; changing a Sarvam draft alone does not update an older pinned version.
+
 ## What is implemented
 
 - **Test capture mode**: admin can allow a client to save an enquiry's call entry without dialling. The existing synthetic coaching demo defaults to this mode. Every submitted phone is saved in Call activity as `test_saved`; missing AI-call permission is shown explicitly. Nothing is sent to Sarvam in test mode. Duplicate phone submissions share one entry. Switching to live does not dial old test records; a fresh, consented enquiry is required.

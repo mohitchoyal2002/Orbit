@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { database, runtimeConfig } from "@/db/connection";
 import { body,clientAccess,endpoint,HttpError,identity,reply } from "@/lib/operations-access";
-import { openingLine,SARVAM_AGENT_TEMPLATE,voiceContextSchema } from "@/lib/voice-shared";
+import { callingBusinessName,openingLine,SARVAM_AGENT_TEMPLATE,voiceContextSchema } from "@/lib/voice-shared";
 import { getVoiceSettings,isDemoClient,processVoiceCalls,requestManualVoiceCall,suppressVoiceContact } from "@/lib/voice";
 import { CallProviderError,checkSarvamConnection,voiceConnector } from "@/lib/voice-sarvam";
 
@@ -25,7 +25,7 @@ export const GET=(request:Request)=>endpoint(async()=>{
   const heartbeat=await db.prepare("SELECT expires_at FROM rate_limits WHERE key='voice-runner-heartbeat'").first<{expires_at:number}>();
   const runnerReady=!!runtimeConfig().ORBIT_RUNNER_TOKEN&&!!heartbeat&&heartbeat.expires_at>Date.now();
   const issues=[...(demo?["Demo workspace: real calls are disabled."]:[]),...(!connector?["Admin must connect a Sarvam Voice Agent and calling number."]:[]),...(!cfg.business_context||!cfg.role_context?["Save the business context and call purpose."]:[])];
-  return reply({owner:access.user.owner,client:access.client,settings:cfg,demo,connectionReady:!!connector,runnerReady,voicePreviewReady:!!runtimeConfig().ORBIT_SARVAM_KEY,issues,template:access.user.owner?SARVAM_AGENT_TEMPLATE:undefined,opening:openingLine(access.client.name,cfg.language),calls:rows.results.slice(0,25),hasMore:rows.results.length>25,page,totals,detail:detail?{...detail,answers:JSON.parse(String(detail.answers||"{}")),attempts:attempts?.results.map(a=>({...a,transcript:a.transcript?JSON.parse(String(a.transcript)):null}))}:null});
+  return reply({owner:access.user.owner,client:access.client,settings:cfg,demo,connectionReady:!!connector,runnerReady,voicePreviewReady:!!runtimeConfig().ORBIT_SARVAM_KEY,issues,template:access.user.owner?SARVAM_AGENT_TEMPLATE:undefined,callingBusinessName:callingBusinessName(cfg,access.client.name),opening:openingLine(callingBusinessName(cfg,access.client.name),cfg.language),calls:rows.results.slice(0,25),hasMore:rows.results.length>25,page,totals,detail:detail?{...detail,answers:JSON.parse(String(detail.answers||"{}")),attempts:attempts?.results.map(a=>({...a,transcript:a.transcript?JSON.parse(String(a.transcript)):null}))}:null});
 });
 const client=z.string().uuid(),revision=z.number().int().nonnegative();
 const schema=z.discriminatedUnion("action",[
@@ -85,7 +85,7 @@ export const POST=(request:Request)=>endpoint(async()=>{
     changed=await db.prepare("UPDATE voice_settings SET admin_enabled=?,test_mode=0,client_enabled=CASE WHEN ?=0 OR test_mode!=0 THEN 0 ELSE client_enabled END,daily_limit=?,start_hour=?,end_hour=?,max_attempts=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(+data.enabled,+data.enabled,data.dailyLimit,data.startHour,data.endHour,data.maxAttempts,now,user.id,data.client,data.revision).first();
   } else if(data.action==="context") {
     if(!user.owner&&!cfg.admin_enabled)throw new HttpError(403,"Ask the owner to enable AI calling for this workspace first.");
-    changed=await db.prepare("UPDATE voice_settings SET business_context=?,role_context=?,language=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(data.businessContext,data.roleContext,data.language,now,user.id,data.client,data.revision).first();
+    changed=await db.prepare("UPDATE voice_settings SET business_name=?,business_context=?,role_context=?,language=?,revision=revision+1,updated_at=?,updated_by=? WHERE client_id=? AND revision=? RETURNING client_id").bind(data.businessName??callingBusinessName(cfg,client.name),data.businessContext,data.roleContext,data.language,now,user.id,data.client,data.revision).first();
   } else {
     if(data.enabled) {
       if(!cfg.admin_enabled)throw new HttpError(403,"The owner must enable this feature first.");

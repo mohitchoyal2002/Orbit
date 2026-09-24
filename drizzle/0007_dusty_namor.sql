@@ -1,0 +1,1 @@
+ALTER TABLE `voice_settings` ADD `business_name` text DEFAULT '' NOT NULL;

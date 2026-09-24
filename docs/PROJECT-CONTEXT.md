@@ -241,6 +241,8 @@ Consented enquiry
 
 A client provides business facts, the role/purpose of the call and a starting language once. OrbitFlow supplies per-lead name and enquiry context on each call. The Sarvam agent must disclose that it is an AI assistant and that written notes are saved.
 
+Calling identity has a separate persisted `voice_settings.business_name` field, labelled **Business name spoken on calls**. Preview, outbound greeting, provider variables and attempt snapshots share the same resolved name. Legacy internal ` · OrbitFlow demo` suffixes are excluded; an actual OrbitFlow business retains its name. Never infer the caller's company from student-submitted enquiry text. Sarvam's committed greeting/instructions must reference the real business-name variable rather than a hardcoded platform name; a draft change also requires updating the pinned provider version before it takes effect on production calls.
+
 The current Programmer's Point context is designed to:
 
 - follow up a submitted course enquiry politely in Hindi/Hinglish;

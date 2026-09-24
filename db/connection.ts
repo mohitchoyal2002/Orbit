@@ -14,6 +14,7 @@ export function runtimeConfig() {
     ORBIT_RESEND_KEY?: string; ORBIT_EMAIL_FROM?: string;
     ORBIT_GOOGLE_CLIENT_ID?: string; ORBIT_GOOGLE_CLIENT_SECRET?: string;
     ORBIT_VOICE_CONNECTORS_JSON?: string;
+    ORBIT_VOICE_AGENT_VERSIONS_JSON?: string;
     ORBIT_SARVAM_KEY?: string;
     ORBIT_SARVAM_VOICE_KEY?: string;
   };

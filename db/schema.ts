@@ -165,6 +165,7 @@ export const voiceSettings = sqliteTable("voice_settings", {
   clientId:text("client_id").primaryKey().references(()=>clients.id),
   adminEnabled:integer("admin_enabled").notNull().default(0),clientEnabled:integer("client_enabled").notNull().default(0),
   testMode:integer("test_mode").notNull().default(1),
+  businessName:text("business_name").notNull().default(""),
   businessContext:text("business_context").notNull().default(""),roleContext:text("role_context").notNull().default(""),
   language:text("language").notNull().default("Hindi"),dailyLimit:integer("daily_limit").notNull().default(20),
   startHour:integer("start_hour").notNull().default(10),endHour:integer("end_hour").notNull().default(18),
